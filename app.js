@@ -198,10 +198,6 @@
     showToast('Sesión cerrada correctamente', 'info');
   }
 
-  function bypassLogin() {
-    loginUser({ id: 'usr-ap', nombre: 'Alejandro Piñeiro', email: 'alepinboz@gmail.com', rol: 'Admin' });
-  }
-
   async function performLogin() {
     const emailEl = document.getElementById('login-email');
     const passwordEl = document.getElementById('login-password');
@@ -223,7 +219,7 @@
     if (btnSubmit) {
       originalBtnHtml = btnSubmit.innerHTML;
       btnSubmit.disabled = true;
-      btnSubmit.innerHTML = `Ingresando...`;
+      btnSubmit.innerHTML = `Verificando...`;
     }
 
     function restoreBtn() {
@@ -234,13 +230,12 @@
       }
     }
 
-    // Default admin matching
+    // Default admin or local user fallback matching
     const knownAdmin = (state.usuarios || []).find(u => (u.email || '').toLowerCase() === email && u.password === password) ||
                        (email === 'alepinboz@gmail.com' && password === 'Focus2011' ? { id: 'usr-ap', nombre: 'Alejandro Piñeiro', email: 'alepinboz@gmail.com', rol: 'Admin' } : null);
 
-    // Timeout API call after 3 seconds
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 4000) : null;
 
     try {
       const fetchOpts = {
@@ -261,7 +256,7 @@
         return;
       } else if (res.status === 401 || res.status === 404) {
         restoreBtn();
-        const errMsg = data.message || (res.status === 404 ? 'USUARIO INEXISTENTE' : 'CONTRASEÑA ERRÓNEA');
+        const errMsg = data.message || (res.status === 404 ? 'USUARIO INEXISTENTE: El correo no existe.' : 'CONTRASEÑA ERRÓNEA: La contraseña es incorrecta.');
         showLoginError(errMsg);
         showToast(errMsg, 'error');
         return;
@@ -272,7 +267,6 @@
     }
 
     restoreBtn();
-    // Fast local fallback for known admin or valid local users
     if (knownAdmin) {
       loginUser(knownAdmin);
       return;
@@ -2174,7 +2168,6 @@
   }
 
   // 1. CSV Import Proveedores
-  document.getElementById('csv-proveedores-file').addEventListener('change', (e) => {
   function readCsvFileSmart(file, callback) {
     if (!file) return;
     const reader = new FileReader();
@@ -2462,14 +2455,6 @@
     });
   }
 
-  const btnLoginBypass = document.getElementById('btn-login-bypass');
-  if (btnLoginBypass) {
-    btnLoginBypass.addEventListener('click', (e) => {
-      e.preventDefault();
-      bypassLogin();
-    });
-  }
-
   ['login-email', 'login-password'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
@@ -2540,7 +2525,6 @@
 
   window.closeModal = closeModal;
   window.performLogin = performLogin;
-  window.bypassLogin = bypassLogin;
 
   // Initialize
   loadState();

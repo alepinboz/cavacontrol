@@ -29,18 +29,15 @@
       <form id="form-login" class="login-form" onsubmit="if(window.performLogin){window.performLogin();} return false;">
         <div class="form-group">
           <label><i data-lucide="mail"></i> Correo Electrónico</label>
-          <input type="email" id="login-email" class="form-control" required placeholder="usuario@empresa.com" value="alepinboz@gmail.com">
+          <input type="email" id="login-email" class="form-control" required placeholder="usuario@empresa.com" value="">
         </div>
         <div class="form-group">
           <label><i data-lucide="key"></i> Contraseña</label>
-          <input type="password" id="login-password" class="form-control" required placeholder="••••••••" value="Focus2011">
+          <input type="password" id="login-password" class="form-control" required placeholder="••••••••" value="">
         </div>
         <div id="login-error-msg" style="display:none; color: #dc2626; background: #fee2e2; border: 1px solid #fca5a5; padding: 0.75rem 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.875rem; text-align: center; font-weight: 600;"></div>
         <button type="button" id="btn-login-submit" class="btn btn-primary full-width btn-lg" onclick="if(window.performLogin){window.performLogin();}">
           <i data-lucide="log-in"></i> Ingresar al Sistema
-        </button>
-        <button type="button" id="btn-login-bypass" class="btn btn-ghost full-width" style="margin-top: 0.5rem; font-size: 0.85rem; color: #64748b;" onclick="if(window.bypassLogin){window.bypassLogin();}">
-          <i data-lucide="zap"></i> Entrar Directo (Sin Autenticación)
         </button>
       </form>
     </div>
