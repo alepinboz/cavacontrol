@@ -2310,6 +2310,10 @@
           return;
         }
 
+        const latestEntrada = (state.entradas || []).filter(e => String(e.articuloId) === String(articuloId)).sort((a, b) => Number(b.numeroCompra) - Number(a.numeroCompra))[0];
+        const pPublico = latestEntrada ? (Number(latestEntrada.precioVentaPublico) || 0) : 0;
+        const pClub = latestEntrada ? (Number(latestEntrada.precioVentaClub) || 0) : 0;
+
         state.salidas.push({
           id: generateUniqueId('sal'),
           fecha,
@@ -2317,7 +2321,9 @@
           tipoVenta: 'BOTELLA',
           articuloId,
           cantidadBotellas,
-          precioUnitario
+          precioUnitario,
+          precioVentaPublico: pPublico,
+          precioVentaClub: pClub
         });
 
         logAuditoria('Salidas', 'Venta por Botella', `Venta de ${cantidadBotellas} botellas de ${art ? art.bodega + ' ' + art.etiqueta : 'Vino'} a cliente ${cli ? cli.nombre + ' ' + cli.apellido : 'Cliente'}`);
@@ -2807,6 +2813,104 @@
         }
       } catch (err) {
         showToast('Error procesando el archivo CSV de compras', 'error');
+      }
+    });
+    e.target.value = '';
+  });
+
+  // 5. CSV Import Salidas / Ventas
+  document.getElementById('csv-salidas-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    readCsvFileSmart(file, (content) => {
+      try {
+        const rows = smartParseCSV(content);
+        if (rows.length === 0) {
+          showToast('El archivo CSV de ventas está vacío o no es válido', 'error');
+          return;
+        }
+
+        let count = 0;
+        rows.forEach(r => {
+          const cliNameStr = r.cliente || r.clientenombre || r.cliente_nombre || r.nombrecliente || r.nombre || '';
+          const bodegaCsv = r.bodega || '';
+          const etiquetaCsv = r.etiqueta || '';
+          const cantBotellas = parseInt(r.cantidadbotellas || r.cantidad || r.botellas || r.cant || '1', 10) || 1;
+          const precioUnit = parseFloat(r.preciounitario || r.precio_unitario || r.precioventa || r.precio || '0') || 0;
+          const precioPublico = parseFloat(r.precioventapublico || r.precio_venta_publico || r.preciopublico || '0') || 0;
+          const precioClub = parseFloat(r.precioventaclub || r.precio_venta_club || r.precioclub || '0') || 0;
+          const rawFecha = r.fecha || r.fechaventa || r.fecha_venta || getFormattedTimestamp();
+
+          let cli = state.clientes.find(c => {
+            const fullName = `${c.nombre} ${c.apellido}`.toLowerCase().trim();
+            const revName = `${c.apellido} ${c.nombre}`.toLowerCase().trim();
+            const target = cliNameStr.toLowerCase().trim();
+            return target && (fullName.includes(target) || revName.includes(target) || target.includes(c.nombre.toLowerCase()));
+          });
+
+          if (!cli && cliNameStr.trim()) {
+            const parts = cliNameStr.trim().split(/\s+/);
+            const nombre = parts[0] || 'Cliente';
+            const apellido = parts.slice(1).join(' ') || 'General';
+            cli = {
+              id: generateUniqueId('cli'),
+              nombre,
+              apellido,
+              telefono: '',
+              provincia: '',
+              localidad: '',
+              direccion: '',
+              membresiaId: ''
+            };
+            state.clientes.push(cli);
+          }
+
+          let art = state.articulos.find(a => {
+            const matchBod = !bodegaCsv || a.bodega.toLowerCase().trim() === bodegaCsv.toLowerCase().trim();
+            const matchEtiq = !etiquetaCsv || a.etiqueta.toLowerCase().trim() === etiquetaCsv.toLowerCase().trim();
+            return matchBod && matchEtiq;
+          });
+
+          if (!art && state.articulos.length > 0) {
+            art = state.articulos[0];
+          }
+
+          if (cli && art) {
+            let fecha = rawFecha.replace('T', ' ');
+            if (fecha.length === 10) fecha += ' 12:00:00';
+
+            const latestEntrada = (state.entradas || []).filter(ent => String(ent.articuloId) === String(art.id)).sort((a, b) => Number(b.numeroCompra) - Number(a.numeroCompra))[0];
+            const pPub = precioPublico > 0 ? precioPublico : (latestEntrada ? (Number(latestEntrada.precioVentaPublico) || 0) : 0);
+            const pClub = precioClub > 0 ? precioClub : (latestEntrada ? (Number(latestEntrada.precioVentaClub) || 0) : 0);
+            const pUnit = precioUnit > 0 ? precioUnit : (cli.membresiaId ? (pClub > 0 ? pClub : pPub) : (pPub > 0 ? pPub : pClub));
+
+            state.salidas.push({
+              id: generateUniqueId('sal'),
+              fecha,
+              clienteId: cli.id,
+              tipoVenta: 'BOTELLA',
+              articuloId: art.id,
+              cantidadBotellas: cantBotellas,
+              precioUnitario: pUnit,
+              precioVentaPublico: pPub,
+              precioVentaClub: pClub,
+              detalle: `${art.bodega} - ${art.etiqueta}`
+            });
+            count++;
+          }
+        });
+
+        if (count > 0) {
+          logAuditoria('Salidas', 'Importación Masiva CSV', `Se registraron ${count} ventas desde CSV`);
+          saveState();
+          renderAllViews();
+          showToast(`Importación exitosa: ${count} ventas/salidas registradas desde CSV`, 'success');
+        } else {
+          showToast('No se pudieron emparejar las ventas con clientes y vinos existentes', 'error');
+        }
+      } catch (err) {
+        showToast('Error procesando el archivo CSV de ventas', 'error');
       }
     });
     e.target.value = '';

@@ -139,7 +139,7 @@ def init_postgres_tables_if_needed():
         CREATE TABLE IF NOT EXISTS MembresiaItems (membresia_id VARCHAR(100) NOT NULL, articulo_id VARCHAR(100) NOT NULL, cantidad INT NOT NULL DEFAULT 1, PRIMARY KEY (membresia_id, articulo_id));
         CREATE TABLE IF NOT EXISTS Clientes (id VARCHAR(100) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, apellido VARCHAR(150) NOT NULL, telefono VARCHAR(100), provincia VARCHAR(100), localidad VARCHAR(100), direccion VARCHAR(255), membresia_id VARCHAR(100));
         CREATE TABLE IF NOT EXISTS Entradas (id VARCHAR(100) PRIMARY KEY, numero_compra INT NOT NULL, articulo_id VARCHAR(100) NOT NULL, cepa VARCHAR(255), proveedor_id VARCHAR(100) NOT NULL, cantidad_cajas INT NOT NULL, unidades_sumadas INT NOT NULL, precio_caja DOUBLE PRECISION NOT NULL, costo_adicional DOUBLE PRECISION NOT NULL DEFAULT 0, fecha VARCHAR(20), precio_venta_publico DOUBLE PRECISION NOT NULL DEFAULT 0, precio_venta_club DOUBLE PRECISION NOT NULL DEFAULT 0);
-        CREATE TABLE IF NOT EXISTS Salidas (id VARCHAR(100) PRIMARY KEY, fecha VARCHAR(20), cliente_id VARCHAR(100) NOT NULL, tipo_venta VARCHAR(50) NOT NULL, articulo_id VARCHAR(100) NOT NULL, membresia_id VARCHAR(100), cantidad_botellas INT NOT NULL, detalle VARCHAR(255));
+        CREATE TABLE IF NOT EXISTS Salidas (id VARCHAR(100) PRIMARY KEY, fecha VARCHAR(50), cliente_id VARCHAR(100) NOT NULL, tipo_venta VARCHAR(50) NOT NULL, articulo_id VARCHAR(100) NOT NULL, membresia_id VARCHAR(100), cantidad_botellas INT NOT NULL, detalle VARCHAR(255), precio_unitario DOUBLE PRECISION NOT NULL DEFAULT 0, precio_venta_publico DOUBLE PRECISION NOT NULL DEFAULT 0, precio_venta_club DOUBLE PRECISION NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS AuditoriaLogs (id VARCHAR(100) PRIMARY KEY, fecha_hora VARCHAR(50) NOT NULL, usuario VARCHAR(255) NOT NULL, modulo VARCHAR(100) NOT NULL, accion VARCHAR(100) NOT NULL, detalle TEXT);
 
         ALTER TABLE Membresias ADD COLUMN IF NOT EXISTS tipo VARCHAR(100) DEFAULT 'Selección';
@@ -148,8 +148,11 @@ def init_postgres_tables_if_needed():
         ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS fecha VARCHAR(20);
         ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS precio_venta_publico DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS precio_venta_club DOUBLE PRECISION DEFAULT 0;
-        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS fecha VARCHAR(20);
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS fecha VARCHAR(50);
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS detalle VARCHAR(255);
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS precio_unitario DOUBLE PRECISION DEFAULT 0;
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS precio_venta_publico DOUBLE PRECISION DEFAULT 0;
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS precio_venta_club DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'Admin';
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS fecha_creacion VARCHAR(50);
         """
@@ -404,10 +407,13 @@ def get_full_state():
         } for r in cursor.fetchall()]
 
         # Salidas
-        db_execute(cursor, "SELECT id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle FROM Salidas")
+        db_execute(cursor, "SELECT id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle, precio_unitario, precio_venta_publico, precio_venta_club FROM Salidas")
         salidas = [{
             "id": str(r[0]), "fecha": str(r[1] or ''), "clienteId": str(r[2]), "tipoVenta": str(r[3]),
-            "articuloId": str(r[4]), "membresiaId": str(r[5] or ''), "cantidadBotellas": int(r[6]), "detalle": str(r[7] or '')
+            "articuloId": str(r[4]), "membresiaId": str(r[5] or ''), "cantidadBotellas": int(r[6]), "detalle": str(r[7] or ''),
+            "precioUnitario": float(r[8] or 0) if len(r) > 8 and r[8] is not None else 0.0,
+            "precioVentaPublico": float(r[9] or 0) if len(r) > 9 and r[9] is not None else 0.0,
+            "precioVentaClub": float(r[10] or 0) if len(r) > 10 and r[10] is not None else 0.0
         } for r in cursor.fetchall()]
 
         # AuditoriaLogs
@@ -589,17 +595,20 @@ def sync_full_state():
         # 6. Salidas Bulk Insert
         sal_rows = [(
             safe_str(s.get('id')),
-            safe_str(s.get('fecha', ''), 20),
+            safe_str(s.get('fecha', ''), 50),
             safe_str(s.get('clienteId')),
             safe_str(s.get('tipoVenta', 'Directa'), 50),
             safe_str(s.get('articuloId')),
             safe_str(s.get('membresiaId'), 100) if s.get('membresiaId') and safe_str(s.get('membresiaId')) in valid_memb_ids else None,
             safe_int(s.get('cantidadBotellas'), 1),
-            safe_str(s.get('detalle', ''), 255)
-        ) for s in data.get('salidas', []) if s.get('id') and safe_str(s.get('clienteId')) in valid_cli_ids and safe_str(s.get('articuloId')) in valid_art_ids]
+            safe_str(s.get('detalle', ''), 255),
+            safe_float(s.get('precioUnitario'), 0.0),
+            safe_float(s.get('precioVentaPublico'), 0.0),
+            safe_float(s.get('precioVentaClub'), 0.0)
+        ) for s in data.get('salidas', []) if s.get('id')]
         sal_rows = deduplicate_rows_by_id(sal_rows)
         if sal_rows:
-            db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
+            db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle, precio_unitario, precio_venta_publico, precio_venta_club) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
 
         # 7. AuditoriaLogs Bulk Insert
         audit_rows = [(

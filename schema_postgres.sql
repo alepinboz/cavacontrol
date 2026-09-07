@@ -76,13 +76,16 @@ CREATE TABLE IF NOT EXISTS Entradas (
 
 CREATE TABLE IF NOT EXISTS Salidas (
     id VARCHAR(100) PRIMARY KEY,
-    fecha VARCHAR(20),
+    fecha VARCHAR(50),
     cliente_id VARCHAR(100) NOT NULL,
     tipo_venta VARCHAR(50) NOT NULL,
     articulo_id VARCHAR(100) NOT NULL,
     membresia_id VARCHAR(100),
     cantidad_botellas INT NOT NULL,
-    detalle VARCHAR(255)
+    detalle VARCHAR(255),
+    precio_unitario DOUBLE PRECISION NOT NULL DEFAULT 0,
+    precio_venta_publico DOUBLE PRECISION NOT NULL DEFAULT 0,
+    precio_venta_club DOUBLE PRECISION NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS AuditoriaLogs (

@@ -516,9 +516,15 @@
               <i data-lucide="search"></i>
               <input type="text" id="search-salidas" placeholder="Buscar por cliente, vino o tipo...">
             </div>
-            <button class="btn btn-primary" id="btn-add-salida">
-              <i data-lucide="plus"></i> Nueva Venta / Entrega
-            </button>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+              <label class="btn btn-secondary" title="Importar ventas (salidas) desde CSV/TXT">
+                <i data-lucide="file-up"></i> Importar CSV
+                <input type="file" id="csv-salidas-file" accept=".csv,.txt" style="display:none;">
+              </label>
+              <button class="btn btn-primary" id="btn-add-salida">
+                <i data-lucide="plus"></i> Nueva Venta / Entrega
+              </button>
+            </div>
           </div>
 
           <div class="filter-bar">
