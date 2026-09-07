@@ -185,6 +185,10 @@ def auth_login():
         email = (data.get('email') or '').strip().lower()
         password = (data.get('password') or '').strip()
 
+        if not email or not password:
+            response.status = 400
+            return {"success": False, "message": "Debe ingresar correo y contraseña."}
+
         conn = get_db()
         cursor = conn.cursor()
         db_execute(cursor, "SELECT * FROM Usuarios")
@@ -197,28 +201,35 @@ def auth_login():
         nombre_idx = col_names.index('nombre') if 'nombre' in col_names else 1
         rol_idx = col_names.index('rol') if 'rol' in col_names else 4
 
+        email_found = False
         matched_user = None
+
         for r in rows:
             u_email = str(r[email_idx] or '').strip().lower()
             u_pass = str(r[pass_idx] or '').strip()
-            if u_email == email and u_pass == password:
-                matched_user = {
-                    "id": str(r[id_idx]),
-                    "nombre": str(r[nombre_idx]),
-                    "email": str(r[email_idx]),
-                    "rol": str(r[rol_idx]) if rol_idx < len(r) else 'Admin'
-                }
-                break
+            if u_email == email:
+                email_found = True
+                if u_pass == password:
+                    matched_user = {
+                        "id": str(r[id_idx]),
+                        "nombre": str(r[nombre_idx]),
+                        "email": str(r[email_idx]),
+                        "rol": str(r[rol_idx]) if rol_idx < len(r) else 'Admin'
+                    }
+                    break
 
         if matched_user:
             return {"success": True, "user": matched_user}
+        elif not email_found:
+            response.status = 404
+            return {"success": False, "message": "USUARIO INEXISTENTE: El correo electrónico ingresado no existe en la base de datos."}
         else:
             response.status = 401
-            return {"success": False, "message": "Credenciales inválidas. Verifique su email y contraseña."}
+            return {"success": False, "message": "CONTRASEÑA ERRÓNEA: La contraseña ingresada es incorrecta."}
     except Exception as e:
         print("ERROR login:", traceback.format_exc())
         response.status = 500
-        return {"success": False, "message": f"Error en BD: {str(e)}"}
+        return {"success": False, "message": f"ERROR DE BASE DE DATOS: {str(e)}"}
     finally:
         if conn:
             try:

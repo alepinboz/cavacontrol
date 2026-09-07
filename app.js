@@ -117,19 +117,7 @@
     try {
       const storedUser = sessionStorage.getItem(SESSION_USER_KEY) || localStorage.getItem(SESSION_USER_KEY);
       if (storedUser) {
-        const userObj = JSON.parse(storedUser);
-        // Validar si el usuario aún existe en la base de datos cargada
-        if (state.usuarios && state.usuarios.length > 0 && isSqlServerConnected) {
-          const exists = state.usuarios.some(u => (u.email || '').toLowerCase() === (userObj.email || '').toLowerCase());
-          if (!exists) {
-            currentUser = null;
-            sessionStorage.removeItem(SESSION_USER_KEY);
-            localStorage.removeItem(SESSION_USER_KEY);
-            showLoginOverlay();
-            return;
-          }
-        }
-        currentUser = userObj;
+        currentUser = JSON.parse(storedUser);
         hideLoginOverlay();
         updateUserBadge();
       } else {
@@ -140,7 +128,24 @@
     }
   }
 
+  function showLoginError(msg) {
+    const errEl = document.getElementById('login-error-msg');
+    if (errEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+  }
+
+  function clearLoginError() {
+    const errEl = document.getElementById('login-error-msg');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.style.display = 'none';
+    }
+  }
+
   function showLoginOverlay() {
+    clearLoginError();
     const overlay = document.getElementById('login-overlay');
     if (overlay) {
       overlay.style.display = 'flex';
@@ -150,6 +155,7 @@
   }
 
   function hideLoginOverlay() {
+    clearLoginError();
     const overlay = document.getElementById('login-overlay');
     if (overlay) {
       overlay.classList.remove('active');
@@ -197,12 +203,14 @@
     const passwordEl = document.getElementById('login-password');
     const btnSubmit = document.getElementById('btn-login-submit');
 
+    clearLoginError();
     if (!emailEl || !passwordEl) return;
 
     const email = emailEl.value.trim();
     const password = passwordEl.value.trim();
 
     if (!email || !password) {
+      showLoginError('Por favor ingrese correo electrónico y contraseña.');
       showToast('Por favor ingrese correo electrónico y contraseña.', 'error');
       return;
     }
@@ -234,17 +242,21 @@
         restoreBtn();
         loginUser(data.user);
         return;
-      } else if (res.status === 401) {
+      } else if (res.status === 401 || res.status === 404) {
         restoreBtn();
-        showToast(data.message || 'Credenciales inválidas. Verifique email y contraseña.', 'error');
+        const errMsg = data.message || (res.status === 404 ? 'USUARIO INEXISTENTE: El usuario no existe.' : 'CONTRASEÑA ERRÓNEA: Contraseña incorrecta.');
+        showLoginError(errMsg);
+        showToast(errMsg, 'error');
         return;
-      } else if (res.status === 500) {
+      } else if (res.status >= 500) {
         restoreBtn();
-        showToast(`Error de servidor: ${data.message || 'Falla en la base de datos'}`, 'error');
+        const errMsg = data.message || 'ERROR DE BASE DE DATOS / SERVIDOR.';
+        showLoginError(errMsg);
+        showToast(`Error de servidor: ${errMsg}`, 'error');
         return;
       }
     } catch (err) {
-      console.warn('Login API offline, intentando autenticación local:', err);
+      console.warn('Login API main endpoint error:', err);
     }
 
     // Direct cloud fallback try if main API_URL had network error
@@ -260,6 +272,12 @@
           restoreBtn();
           loginUser(dataCloud.user);
           return;
+        } else if (resCloud.status === 401 || resCloud.status === 404) {
+          restoreBtn();
+          const errMsg = dataCloud.message || (resCloud.status === 404 ? 'USUARIO INEXISTENTE' : 'CONTRASEÑA ERRÓNEA');
+          showLoginError(errMsg);
+          showToast(errMsg, 'error');
+          return;
         }
       }
     } catch (eCloud) {
@@ -272,7 +290,9 @@
     if (localUser) {
       loginUser({ id: localUser.id, nombre: localUser.nombre, email: localUser.email, rol: localUser.rol });
     } else {
-      showToast('Credenciales inválidas. Verifique su email y contraseña.', 'error');
+      const errMsg = 'ERROR DE CONEXIÓN / CREDENCIALES: Verifique usuario, contraseña o conexión.';
+      showLoginError(errMsg);
+      showToast(errMsg, 'error');
     }
   }
 
