@@ -267,6 +267,8 @@
 
   // --- SQL SERVER 2019 & LOCALSTORAGE PERSISTENCE ---
 
+  let lastDbErrorMessage = '';
+
   async function loadState() {
     try {
       const res = await fetch(`${API_URL}/db?t=${Date.now()}`);
@@ -278,19 +280,24 @@
           if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
           normalizeMembresias(state.membresias);
           isSqlServerConnected = true;
+          lastDbErrorMessage = '';
           updateSqlBadge(true);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           renderAllViews();
           checkSession();
           return;
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        lastDbErrorMessage = errJson.error || errJson.message || `Error HTTP ${res.status}`;
       }
     } catch (e) {
-      console.warn('SQL Server API backend no disponible, usando localStorage nativo:', e);
+      console.warn('Backend API no disponible:', e);
+      lastDbErrorMessage = e.message || 'Error de conexión a la API';
     }
 
     isSqlServerConnected = false;
-    updateSqlBadge(false);
+    updateSqlBadge(false, lastDbErrorMessage);
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
@@ -328,18 +335,22 @@
       });
       if (res.ok) {
         isSqlServerConnected = true;
+        lastDbErrorMessage = '';
         updateSqlBadge(true);
       } else {
+        const errJson = await res.json().catch(() => ({}));
+        lastDbErrorMessage = errJson.error || errJson.message || `Sync HTTP ${res.status}`;
         isSqlServerConnected = false;
-        updateSqlBadge(false);
+        updateSqlBadge(false, lastDbErrorMessage);
       }
     } catch (e) {
       isSqlServerConnected = false;
-      updateSqlBadge(false);
+      lastDbErrorMessage = e.message || 'Error de conexión';
+      updateSqlBadge(false, lastDbErrorMessage);
     }
   }
 
-  function updateSqlBadge(connected) {
+  function updateSqlBadge(connected, errMsg = '') {
     const badge = document.getElementById('sql-status-badge');
     const text = document.getElementById('sql-status-text');
     if (!badge || !text) return;
@@ -350,12 +361,15 @@
       badge.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
       badge.style.color = '#10b981';
       badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      badge.title = 'Conectado exitosamente a la base de datos de producción';
       text.textContent = isCloud ? 'Base de Datos Nube: Conectado' : 'SQL Server 2019: Conectado';
     } else {
       badge.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
       badge.style.color = '#f59e0b';
       badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-      text.textContent = isCloud ? 'Base de Datos Nube: Offline (Cache)' : 'SQL Server 2019: Offline (Cache)';
+      const shortErr = errMsg ? `: ${errMsg.substring(0, 40)}...` : '';
+      badge.title = errMsg || 'Sin conexión a la base de datos backend';
+      text.textContent = isCloud ? `Base de Datos Nube: Offline (${errMsg ? errMsg.substring(0, 25) : 'Cache'})` : 'SQL Server 2019: Offline (Cache)';
     }
   }
 
@@ -2343,34 +2357,10 @@
     e.target.value = '';
   });
 
-  // --- LOGIN & REGISTER EVENT LISTENERS ---
-  const tabLoginBtn = document.getElementById('tab-login-btn');
-  const tabRegisterBtn = document.getElementById('tab-register-btn');
-  const formLogin = document.getElementById('form-login');
-  const formRegister = document.getElementById('form-register');
-
-  tabLoginBtn.addEventListener('click', () => {
-    tabLoginBtn.classList.add('active');
-    tabRegisterBtn.classList.remove('active');
-    formLogin.style.display = 'block';
-    formRegister.style.display = 'none';
-  });
-
-  tabRegisterBtn.addEventListener('click', () => {
-    tabRegisterBtn.classList.add('active');
-    tabLoginBtn.classList.remove('active');
-    formRegister.style.display = 'block';
-    formLogin.style.display = 'none';
-  });
-
+  // --- LOGIN EVENT LISTENERS ---
   const btnLoginSubmit = document.getElementById('btn-login-submit');
   if (btnLoginSubmit) {
     btnLoginSubmit.addEventListener('click', performLogin);
-  }
-
-  const btnRegisterSubmit = document.getElementById('btn-register-submit');
-  if (btnRegisterSubmit) {
-    btnRegisterSubmit.addEventListener('click', performRegister);
   }
 
   ['login-email', 'login-password'].forEach(id => {
@@ -2380,18 +2370,6 @@
         if (e.key === 'Enter') {
           e.preventDefault();
           performLogin();
-        }
-      });
-    }
-  });
-
-  ['reg-nombre', 'reg-email', 'reg-password'].forEach(id => {
-    const input = document.getElementById(id);
-    if (input) {
-      input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          performRegister();
         }
       });
     }

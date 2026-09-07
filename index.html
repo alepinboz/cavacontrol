@@ -25,11 +25,6 @@
         <p class="text-muted">Acceso al Sistema de Gestión de Vinos</p>
       </div>
 
-      <div class="login-tabs">
-        <button id="tab-login-btn" type="button" class="login-tab-btn active">Iniciar Sesión</button>
-        <button id="tab-register-btn" type="button" class="login-tab-btn">Registrarse</button>
-      </div>
-
       <!-- FORM INICIAR SESIÓN -->
       <form id="form-login" class="login-form" onsubmit="return false;">
         <div class="form-group">
@@ -42,28 +37,6 @@
         </div>
         <button type="button" id="btn-login-submit" class="btn btn-primary full-width btn-lg">
           <i data-lucide="log-in"></i> Ingresar al Sistema
-        </button>
-        <p class="login-hint text-center text-muted mt-2" style="font-size: 0.8rem;">
-          Acceso demo por defecto: <strong>admin@cavacontrol.com</strong> / <strong>admin123</strong>
-        </p>
-      </form>
-
-      <!-- FORM REGISTRO -->
-      <form id="form-register" class="login-form" style="display: none;" onsubmit="return false;">
-        <div class="form-group">
-          <label><i data-lucide="user"></i> Nombre Completo</label>
-          <input type="text" id="reg-nombre" class="form-control" required placeholder="Ej: Alejandro Bozzolo">
-        </div>
-        <div class="form-group">
-          <label><i data-lucide="mail"></i> Correo Electrónico</label>
-          <input type="email" id="reg-email" class="form-control" required placeholder="usuario@bodega.com">
-        </div>
-        <div class="form-group">
-          <label><i data-lucide="key"></i> Contraseña</label>
-          <input type="password" id="reg-password" class="form-control" required placeholder="••••••••">
-        </div>
-        <button type="button" id="btn-register-submit" class="btn btn-emerald full-width btn-lg">
-          <i data-lucide="user-plus"></i> Crear Cuenta
         </button>
       </form>
     </div>
