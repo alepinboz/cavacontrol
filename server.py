@@ -440,10 +440,12 @@ def sync_full_state():
         if art_rows:
             db_executemany(cursor, "INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb) VALUES (?, ?, ?, ?, ?)", art_rows)
 
+        valid_art_ids = {a[0] for a in art_rows}
+
         art_prov_rows = []
         for a in data.get('articulos', []):
             art_id = safe_str(a.get('id'))
-            if not art_id:
+            if not art_id or art_id not in valid_art_ids:
                 continue
             seen_pids = set()
             for pid in a.get('proveedoresIds', []):
@@ -468,10 +470,12 @@ def sync_full_state():
         if memb_rows:
             db_executemany(cursor, "INSERT INTO Membresias (id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", memb_rows)
 
+        valid_memb_ids = {m[0] for m in memb_rows}
+
         memb_items_rows = []
         for m in data.get('membresias', []):
             m_id = safe_str(m.get('id'))
-            if not m_id:
+            if not m_id or m_id not in valid_memb_ids:
                 continue
             items = m.get('items', [])
             if not items and m.get('articuloId'):
@@ -479,7 +483,7 @@ def sync_full_state():
             seen_items = set()
             for item in items:
                 art_id_str = safe_str(item.get('articuloId'))
-                if art_id_str and art_id_str not in seen_items:
+                if art_id_str and art_id_str in valid_art_ids and art_id_str not in seen_items:
                     seen_items.add(art_id_str)
                     memb_items_rows.append((m_id, art_id_str, safe_int(item.get('cantidad'), 1)))
         if memb_items_rows:
@@ -494,10 +498,12 @@ def sync_full_state():
             safe_str(c.get('provincia', ''), 100),
             safe_str(c.get('localidad', ''), 100),
             safe_str(c.get('direccion', ''), 255),
-            safe_str(c.get('membresiaId', ''), 100)
+            safe_str(c.get('membresiaId'), 100) if c.get('membresiaId') and safe_str(c.get('membresiaId')) in valid_memb_ids else None
         ) for c in data.get('clientes', []) if c.get('id')]
         if cli_rows:
             db_executemany(cursor, "INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
+
+        valid_cli_ids = {c[0] for c in cli_rows}
 
         # 5. Entradas Bulk Insert
         ent_rows = [(
@@ -511,7 +517,7 @@ def sync_full_state():
             safe_float(e.get('precioCaja'), 0.0),
             safe_float(e.get('costoAdicionalCaja'), 0.0),
             safe_str(e.get('fecha', ''), 20)
-        ) for e in data.get('entradas', []) if e.get('id')]
+        ) for e in data.get('entradas', []) if e.get('id') and safe_str(e.get('articuloId')) in valid_art_ids and safe_str(e.get('proveedorId')) in valid_prov_ids]
         if ent_rows:
             db_executemany(cursor, "INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
 
@@ -522,10 +528,10 @@ def sync_full_state():
             safe_str(s.get('clienteId')),
             safe_str(s.get('tipoVenta', 'Directa'), 50),
             safe_str(s.get('articuloId')),
-            safe_str(s.get('membresiaId'), 100) if s.get('membresiaId') else None,
+            safe_str(s.get('membresiaId'), 100) if s.get('membresiaId') and safe_str(s.get('membresiaId')) in valid_memb_ids else None,
             safe_int(s.get('cantidadBotellas'), 1),
             safe_str(s.get('detalle', ''), 255)
-        ) for s in data.get('salidas', []) if s.get('id')]
+        ) for s in data.get('salidas', []) if s.get('id') and safe_str(s.get('clienteId')) in valid_cli_ids and safe_str(s.get('articuloId')) in valid_art_ids]
         if sal_rows:
             db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
 
