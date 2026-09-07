@@ -8,8 +8,10 @@
 
   const STORAGE_KEY = 'cavacontrol_db_v1';
   const SESSION_USER_KEY = 'cavacontrol_current_user';
-  const isLocalEnv = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3001' || window.location.port === '5500' || window.location.port === '8080');
-  const API_URL = isLocalEnv ? 'http://localhost:3001/api' : `${window.location.origin}/api`;
+  let API_URL = `${window.location.origin}/api`;
+  if (window.location.protocol === 'file:' || (window.location.hostname !== 'borra-cavacontrol.onrender.com' && !window.location.hostname.includes('onrender.com') && window.location.port !== '3001')) {
+    API_URL = 'https://borra-cavacontrol.onrender.com/api';
+  }
 
   let state = {
     usuarios: [],
@@ -193,6 +195,7 @@
   async function performLogin() {
     const emailEl = document.getElementById('login-email');
     const passwordEl = document.getElementById('login-password');
+    const btnSubmit = document.getElementById('btn-login-submit');
 
     if (!emailEl || !passwordEl) return;
 
@@ -204,6 +207,21 @@
       return;
     }
 
+    let originalBtnHtml = '';
+    if (btnSubmit) {
+      originalBtnHtml = btnSubmit.innerHTML;
+      btnSubmit.disabled = true;
+      btnSubmit.innerHTML = `Conectando...`;
+    }
+
+    function restoreBtn() {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = originalBtnHtml;
+        if (window.lucide) window.lucide.createIcons({ scope: btnSubmit });
+      }
+    }
+
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
@@ -213,12 +231,15 @@
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success && data.user) {
+        restoreBtn();
         loginUser(data.user);
         return;
       } else if (res.status === 401) {
+        restoreBtn();
         showToast(data.message || 'Credenciales inválidas. Verifique email y contraseña.', 'error');
         return;
       } else if (res.status === 500) {
+        restoreBtn();
         showToast(`Error de servidor: ${data.message || 'Falla en la base de datos'}`, 'error');
         return;
       }
@@ -226,7 +247,27 @@
       console.warn('Login API offline, intentando autenticación local:', err);
     }
 
-    // Local fallback check (solo cuando la API está offline)
+    // Direct cloud fallback try if main API_URL had network error
+    try {
+      if (API_URL !== 'https://borra-cavacontrol.onrender.com/api') {
+        const resCloud = await fetch(`https://borra-cavacontrol.onrender.com/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const dataCloud = await resCloud.json().catch(() => ({}));
+        if (resCloud.ok && dataCloud.success && dataCloud.user) {
+          restoreBtn();
+          loginUser(dataCloud.user);
+          return;
+        }
+      }
+    } catch (eCloud) {
+      console.warn('Cloud login fallback error:', eCloud);
+    }
+
+    restoreBtn();
+    // Local fallback check
     const localUser = (state.usuarios || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
     if (localUser) {
       loginUser({ id: localUser.id, nombre: localUser.nombre, email: localUser.email, rol: localUser.rol });
