@@ -6,6 +6,8 @@
 (function () {
   'use strict';
 
+  const STORAGE_KEY = 'cavacontrol_db_v1';
+  const SESSION_USER_KEY = 'cavacontrol_current_user';
   const isLocalEnv = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3001' || window.location.port === '5500' || window.location.port === '8080');
   const API_URL = isLocalEnv ? 'http://localhost:3001/api' : `${window.location.origin}/api`;
 
@@ -196,25 +198,30 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.user) {
-          loginUser(data.user);
-          return;
-        }
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success && data.user) {
+        loginUser(data.user);
+        return;
+      } else if (res.status === 401) {
+        showToast(data.message || 'Credenciales inválidas. Verifique email y contraseña.', 'error');
+        return;
+      } else if (res.status === 500) {
+        showToast(`Error de servidor: ${data.message || 'Falla en la base de datos'}`, 'error');
+        return;
       }
     } catch (err) {
-      console.warn('Login API offline, usando credenciales locales:', err);
+      console.warn('Login API offline, intentando autenticación local:', err);
     }
 
     // Local fallback check
-    const localUser = (state.usuarios || []).find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+    const localUser = (state.usuarios || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
     if (localUser) {
       loginUser({ id: localUser.id, nombre: localUser.nombre, email: localUser.email, rol: localUser.rol });
-    } else if (email === 'admin@cavacontrol.com' && password === 'admin123') {
+    } else if (email.toLowerCase() === 'admin@cavacontrol.com' && password === 'admin123') {
       loginUser({ id: 'usr-admin', nombre: 'Administrador', email: 'admin@cavacontrol.com', rol: 'Admin' });
     } else {
-      showToast('Credenciales inválidas. Verifique email y contraseña.', 'error');
+      showToast('Credenciales inválidas. Verifique su email y contraseña.', 'error');
     }
   }
 
@@ -2358,9 +2365,20 @@
   });
 
   // --- LOGIN EVENT LISTENERS ---
+  const formLogin = document.getElementById('form-login');
+  if (formLogin) {
+    formLogin.addEventListener('submit', (e) => {
+      e.preventDefault();
+      performLogin();
+    });
+  }
+
   const btnLoginSubmit = document.getElementById('btn-login-submit');
   if (btnLoginSubmit) {
-    btnLoginSubmit.addEventListener('click', performLogin);
+    btnLoginSubmit.addEventListener('click', (e) => {
+      e.preventDefault();
+      performLogin();
+    });
   }
 
   ['login-email', 'login-password'].forEach(id => {
