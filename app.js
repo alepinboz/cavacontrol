@@ -997,7 +997,7 @@
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No hay salidas/ventas registradas</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay salidas/ventas registradas</td></tr>`;
       return;
     }
 
@@ -1014,6 +1014,9 @@
         if (memb) detalleDisplay = `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion} (${detalleDisplay})`;
       }
 
+      const unitPrice = Number(s.precioUnitario) || 0;
+      const totalVenta = unitPrice * (Number(s.cantidadBotellas) || 0);
+
       html += `
         <tr>
           <td class="text-muted">${s.fecha}</td>
@@ -1021,6 +1024,8 @@
           <td><span class="badge ${badgeClass}">${isMembresia ? 'Membresía' : 'Botella'}</span></td>
           <td>${detalleDisplay}</td>
           <td><strong>${s.cantidadBotellas}</strong> bot.</td>
+          <td>${unitPrice > 0 ? formatCurrency(unitPrice) : '-'}</td>
+          <td><strong>${totalVenta > 0 ? formatCurrency(totalVenta) : '-'}</strong></td>
           <td>
             <button class="btn btn-ghost btn-sm btn-icon" onclick="window.deleteSalida('${s.id}')" title="Eliminar Venta"><i data-lucide="trash-2"></i></button>
           </td>
@@ -1539,29 +1544,29 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Número de Teléfono *</label>
-            <input type="text" id="cli-telefono" class="form-control" value="${isEdit ? cli.telefono || '' : ''}" required placeholder="+54 9 261 ...">
+            <label>Número de Teléfono</label>
+            <input type="text" id="cli-telefono" class="form-control" value="${isEdit ? cli.telefono || '' : ''}" placeholder="Ej: +54 9 261 ...">
           </div>
           <div class="form-group">
-            <label>Provincia *</label>
-            <input type="text" id="cli-provincia" class="form-control" value="${isEdit ? cli.provincia || '' : 'Mendoza'}" required placeholder="Ej: Mendoza">
+            <label>Provincia</label>
+            <input type="text" id="cli-provincia" class="form-control" value="${isEdit ? cli.provincia || '' : ''}" placeholder="Ej: Mendoza">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Localidad *</label>
-            <input type="text" id="cli-localidad" class="form-control" value="${isEdit ? cli.localidad || '' : ''}" required placeholder="Ej: Luján de Cuyo">
+            <label>Localidad</label>
+            <input type="text" id="cli-localidad" class="form-control" value="${isEdit ? cli.localidad || '' : ''}" placeholder="Ej: Luján de Cuyo">
           </div>
           <div class="form-group">
-            <label>Dirección *</label>
-            <input type="text" id="cli-direccion" class="form-control" value="${isEdit ? cli.direccion || '' : ''}" required placeholder="Ej: Av. San Martín 1420">
+            <label>Dirección</label>
+            <input type="text" id="cli-direccion" class="form-control" value="${isEdit ? cli.direccion || '' : ''}" placeholder="Ej: Av. San Martín 1420">
           </div>
         </div>
 
         <div class="form-group">
-          <label>Membresía Asignada (Selección / Élite / Personalizadas) *</label>
-          <select id="cli-membresia" class="form-control" required>
-            <option value="">-- Seleccionar Membresía --</option>
+          <label>Membresía Asignada (Opcional)</label>
+          <select id="cli-membresia" class="form-control">
+            <option value="">Sin Membresía / Público General</option>
             ${membOptions}
           </select>
         </div>
@@ -1886,6 +1891,17 @@
               <input type="number" id="sal-cantidad" class="form-control" min="1" value="1">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Precio Unitario de Venta ($ / botella) * <span id="sal-price-tag" class="badge badge-info" style="font-size:0.75rem; margin-left:0.3rem">Sugerido</span></label>
+              <input type="number" id="sal-precio-unitario" class="form-control" min="0" step="100" value="0">
+              <div id="sal-price-options" style="display:flex; gap:0.5rem; margin-top:0.4rem; font-size:0.8rem"></div>
+            </div>
+            <div class="form-group">
+              <label>Total de la Venta ($)</label>
+              <input type="text" id="sal-total-calc" class="form-control" readonly value="$0" style="font-weight:bold; font-size:1.1rem; color:var(--gold-accent)">
+            </div>
+          </div>
         </div>
 
         <div id="sec-salida-membresia" style="display:none">
@@ -1919,12 +1935,87 @@
     const membSelect = document.getElementById('sal-membresia');
     const membInfoDiv = document.getElementById('sal-membresia-info');
 
+    const precioUnitInput = document.getElementById('sal-precio-unitario');
+    const cantidadInput = document.getElementById('sal-cantidad');
+    const totalCalcInput = document.getElementById('sal-total-calc');
+    const priceTagSpan = document.getElementById('sal-price-tag');
+    const priceOptionsDiv = document.getElementById('sal-price-options');
+
     const sortedArts = getSortedArticulos();
 
     artSelect.innerHTML = sortedArts.map(a => {
       const stock = getArticuloMetrics(a.id).stock;
       return `<option value="${a.id}">${a.bodega} - ${a.etiqueta} (${a.cepa}) [Stock: ${stock} bot.]</option>`;
     }).join('');
+
+    function calculatePriceSuggestion() {
+      const cliId = cliSelect.value;
+      const artId = artSelect.value;
+      const today = document.getElementById('sal-fecha').value;
+
+      const cli = state.clientes.find(c => String(c.id) === String(cliId));
+      const clientMemb = cli && cli.membresiaId ? state.membresias.find(m => String(m.id) === String(cli.membresiaId)) : null;
+      const hasActiveMemb = clientMemb ? isMembresiaVigente(clientMemb, today) : false;
+
+      const latestEntrada = (state.entradas || []).filter(e => String(e.articuloId) === String(artId)).sort((a, b) => Number(b.numeroCompra) - Number(a.numeroCompra))[0];
+
+      const pPublico = latestEntrada ? (Number(latestEntrada.precioVentaPublico) || 0) : 0;
+      const pClub = latestEntrada ? (Number(latestEntrada.precioVentaClub) || 0) : 0;
+
+      let sugerido = 0;
+      if (hasActiveMemb) {
+        sugerido = pClub > 0 ? pClub : pPublico;
+        if (priceTagSpan) {
+          priceTagSpan.className = 'badge badge-warning';
+          priceTagSpan.textContent = '⭐ Sugerido BORRA CLUB';
+        }
+      } else {
+        sugerido = pPublico > 0 ? pPublico : pClub;
+        if (priceTagSpan) {
+          priceTagSpan.className = 'badge badge-info';
+          priceTagSpan.textContent = '👥 Sugerido Público General';
+        }
+      }
+
+      precioUnitInput.value = sugerido;
+      updateTotal();
+
+      if (priceOptionsDiv) {
+        priceOptionsDiv.innerHTML = `
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-price-club" style="padding:0.2rem 0.5rem; font-size:0.75rem; border:1px solid ${hasActiveMemb ? 'var(--gold-accent)' : 'var(--border-color)'}; color:${hasActiveMemb ? 'var(--gold-accent)' : 'inherit'}">
+            🍷 Borra Club: ${formatCurrency(pClub)}
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-price-public" style="padding:0.2rem 0.5rem; font-size:0.75rem; border:1px solid ${!hasActiveMemb ? 'var(--gold-accent)' : 'var(--border-color)'}; color:${!hasActiveMemb ? 'var(--gold-accent)' : 'inherit'}">
+            👥 Público: ${formatCurrency(pPublico)}
+          </button>
+        `;
+
+        document.getElementById('btn-price-club').addEventListener('click', () => {
+          precioUnitInput.value = pClub;
+          updateTotal();
+        });
+        document.getElementById('btn-price-public').addEventListener('click', () => {
+          precioUnitInput.value = pPublico;
+          updateTotal();
+        });
+      }
+    }
+
+    function updateTotal() {
+      const cant = parseInt(cantidadInput.value, 10) || 0;
+      const pu = parseFloat(precioUnitInput.value) || 0;
+      totalCalcInput.value = formatCurrency(cant * pu);
+    }
+
+    cliSelect.addEventListener('change', () => {
+      updateMembresiaOptions();
+      calculatePriceSuggestion();
+    });
+    artSelect.addEventListener('change', calculatePriceSuggestion);
+    cantidadInput.addEventListener('input', updateTotal);
+    precioUnitInput.addEventListener('input', updateTotal);
+
+    calculatePriceSuggestion();
 
     function updateMembresiaOptions() {
       const cliId = cliSelect.value;
@@ -1973,9 +2064,11 @@
       }
     }
 
-    cliSelect.addEventListener('change', updateMembresiaOptions);
     membSelect.addEventListener('change', onMembresiaChange);
-    document.getElementById('sal-fecha').addEventListener('change', updateMembresiaOptions);
+    document.getElementById('sal-fecha').addEventListener('change', () => {
+      updateMembresiaOptions();
+      calculatePriceSuggestion();
+    });
 
     Array.from(radiosTipo).forEach(radio => {
       radio.addEventListener('change', () => {
@@ -2005,6 +2098,7 @@
       if (tipoVenta === 'BOTELLA') {
         const articuloId = artSelect.value;
         const cantidadBotellas = parseInt(document.getElementById('sal-cantidad').value, 10) || 0;
+        const precioUnitario = parseFloat(precioUnitInput.value) || 0;
         const art = state.articulos.find(a => String(a.id) === String(articuloId));
 
         if (!articuloId) {
@@ -2028,7 +2122,8 @@
           clienteId,
           tipoVenta: 'BOTELLA',
           articuloId,
-          cantidadBotellas
+          cantidadBotellas,
+          precioUnitario
         });
 
         logAuditoria('Salidas', 'Venta por Botella', `Venta de ${cantidadBotellas} botellas de ${art ? art.bodega + ' ' + art.etiqueta : 'Vino'} a cliente ${cli ? cli.nombre + ' ' + cli.apellido : 'Cliente'}`);
