@@ -886,7 +886,7 @@
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">No hay compras (entradas) registradas</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted">No hay compras (entradas) registradas</td></tr>`;
       return;
     }
 
@@ -900,6 +900,8 @@
       const uxb = art ? (Number(art.uxb) || 1) : 1;
       const costoUnitarioBotella = (precioCaja + costoAdicCaja) / uxb;
       const totalCompra = Number(e.cantidadCajas) * (precioCaja + costoAdicCaja);
+      const precioPublico = Number(e.precioVentaPublico) || 0;
+      const precioClub = Number(e.precioVentaClub) || 0;
 
       html += `
         <tr>
@@ -913,6 +915,8 @@
           <td class="text-gold">+${formatCurrency(costoAdicCaja)}</td>
           <td><strong class="text-gold">${formatCurrency(costoUnitarioBotella)}</strong></td>
           <td><strong class="text-gold">${formatCurrency(totalCompra)}</strong></td>
+          <td>${formatCurrency(precioPublico)}</td>
+          <td><strong class="text-gold">${formatCurrency(precioClub)}</strong></td>
           <td class="text-muted">${e.fecha}</td>
         </tr>
       `;
@@ -1701,6 +1705,16 @@
           <label>Costo Resultante por Botella [(Precio Caja + Costo Adic.) / UxB]</label>
           <input type="text" id="ent-costo-botella-calc" class="form-control" readonly value="$0.00" style="font-weight:bold; font-size:1.05rem">
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio Venta Público General ($ / botella) *</label>
+            <input type="number" id="ent-precio-publico" class="form-control" min="0" step="100" value="0" placeholder="Ej: 8500">
+          </div>
+          <div class="form-group">
+            <label>Precio Venta BORRA CLUB ($ / botella) *</label>
+            <input type="number" id="ent-precio-club" class="form-control" min="0" step="100" value="0" placeholder="Ej: 6500">
+          </div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="window.closeModal()">Cancelar</button>
           <button type="submit" class="btn btn-primary">Registrar Compra e Incrementar Stock</button>
@@ -1718,6 +1732,8 @@
     const adicInput = document.getElementById('ent-costo-adic');
     const unCalcInput = document.getElementById('ent-unidades-calc');
     const unitCalcInput = document.getElementById('ent-costo-botella-calc');
+    const precioPublicoInput = document.getElementById('ent-precio-publico');
+    const precioClubInput = document.getElementById('ent-precio-club');
 
     function updateArtInfo() {
       const artId = artSelect.value;
@@ -1765,6 +1781,8 @@
       const cantidadCajas = parseInt(cajasInput.value, 10) || 0;
       const precioCaja = parseFloat(precioInput.value) || 0;
       const costoAdicionalCaja = parseFloat(adicInput.value) || 0;
+      const precioVentaPublico = parseFloat(precioPublicoInput.value) || 0;
+      const precioVentaClub = parseFloat(precioClubInput.value) || 0;
       const fecha = document.getElementById('ent-fecha').value;
 
       const art = state.articulos.find(a => String(a.id) === String(articuloId));
@@ -1793,6 +1811,8 @@
         unidadesSumadas,
         precioCaja,
         costoAdicionalCaja,
+        precioVentaPublico,
+        precioVentaClub,
         fecha
       });
 
@@ -2394,9 +2414,11 @@
           let precioCaja = 0;
           let costoAdicCaja = 0;
           let fecha = r.fecha || '';
+          let precioVentaPublico = parseFloat(r.precioventapublico || r.preciopublico || '0') || 0;
+          let precioVentaClub = parseFloat(r.precioventaclub || r.precioclub || r.precioborraclub || '0') || 0;
 
-          if (raw.length >= 8) {
-            // New 8-column format: bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha
+          if (raw.length >= 10) {
+            // 10-column format: bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha;precioVentaPublico;precioVentaClub
             bodega = bodega || raw[0] || '';
             etiqueta = etiqueta || raw[1] || '';
             cepaCsv = cepaCsv || raw[2] || '';
@@ -2405,6 +2427,21 @@
             precioCaja = parseFloat(r.preciocaja || r.precio || raw[5] || '0') || 0;
             costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[6] || '0') || 0;
             fecha = fecha || raw[7] || new Date().toISOString().split('T')[0];
+            precioVentaPublico = parseFloat(r.precioventapublico || r.preciopublico || raw[8] || '0') || 0;
+            precioVentaClub = parseFloat(r.precioventaclub || r.precioclub || r.precioborraclub || raw[9] || '0') || 0;
+          } else if (raw.length === 8 || raw.length === 9) {
+            // 8/9-column format: bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha;[precioVentaPublico]
+            bodega = bodega || raw[0] || '';
+            etiqueta = etiqueta || raw[1] || '';
+            cepaCsv = cepaCsv || raw[2] || '';
+            provNombre = provNombre || raw[3] || '';
+            cajas = parseInt(r.cantidadcajas || r.cajas || raw[4] || '1', 10) || 1;
+            precioCaja = parseFloat(r.preciocaja || r.precio || raw[5] || '0') || 0;
+            costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[6] || '0') || 0;
+            fecha = fecha || raw[7] || new Date().toISOString().split('T')[0];
+            if (raw.length === 9) {
+              precioVentaPublico = parseFloat(r.precioventapublico || r.preciopublico || raw[8] || '0') || 0;
+            }
           } else if (raw.length === 7) {
             // Legacy 7-column format: bodega;etiqueta;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha
             bodega = bodega || raw[0] || '';
@@ -2423,6 +2460,8 @@
             precioCaja = parseFloat(r.preciocaja || r.precio || raw[5] || raw[4] || '0') || 0;
             costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[6] || raw[5] || '0') || 0;
             fecha = fecha || raw[7] || raw[6] || new Date().toISOString().split('T')[0];
+            precioVentaPublico = parseFloat(r.precioventapublico || r.preciopublico || raw[8] || '0') || 0;
+            precioVentaClub = parseFloat(r.precioventaclub || r.precioclub || r.precioborraclub || raw[9] || '0') || 0;
           }
 
           if (!bodega || !etiqueta) return;
@@ -2459,6 +2498,8 @@
               unidadesSumadas: cajas * uxb,
               precioCaja: precioCaja,
               costoAdicionalCaja: costoAdicCaja,
+              precioVentaPublico: precioVentaPublico,
+              precioVentaClub: precioVentaClub,
               fecha: fecha
             });
             count++;

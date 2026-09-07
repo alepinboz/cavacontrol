@@ -69,7 +69,9 @@ CREATE TABLE IF NOT EXISTS Entradas (
     unidades_sumadas INT NOT NULL,
     precio_caja DOUBLE PRECISION NOT NULL,
     costo_adicional DOUBLE PRECISION NOT NULL DEFAULT 0,
-    fecha VARCHAR(20)
+    fecha VARCHAR(20),
+    precio_venta_publico DOUBLE PRECISION NOT NULL DEFAULT 0,
+    precio_venta_club DOUBLE PRECISION NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS Salidas (

@@ -1,3 +1,3 @@
-bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha
-Catena Zapata;D.V. Catena;Cabernet Malbec;Distribuidora Cavas del Sur;10;54000;3600;2026-08-01
-Aleanna;El Enemigo;Malbec;Mendoza Wine Logistics;5;48000;3000;2026-08-15
+bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha;precioVentaPublico;precioVentaClub
+Catena Zapata;D.V. Catena;Cabernet Malbec;Distribuidora Cavas del Sur;10;54000;3600;2026-08-01;11500;8900
+Aleanna;El Enemigo;Malbec;Mendoza Wine Logistics;5;48000;3000;2026-08-15;10200;7800
