@@ -2,7 +2,10 @@ import json
 import traceback
 import os
 import datetime
-from bottle import Bottle, request, response, static_file, run
+from bottle import Bottle, request, response, static_file, run, BaseRequest
+
+# Set maximum request body size to 50 MB to support large CSV sync payloads
+BaseRequest.MEMFILE_MAX = 50 * 1024 * 1024
 
 app = Bottle()
 
@@ -95,7 +98,8 @@ def db_executemany(cursor, query, params_list):
         return
     if IS_POSTGRES:
         query_pg = query.replace('?', '%s')
-        cursor.executemany(query_pg, params_list)
+        for p in params_list:
+            cursor.execute(query_pg, p)
     else:
         cursor.fast_executemany = True
         cursor.executemany(query, params_list)
