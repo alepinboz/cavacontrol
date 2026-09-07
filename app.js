@@ -214,12 +214,10 @@
       console.warn('Login API offline, intentando autenticación local:', err);
     }
 
-    // Local fallback check
+    // Local fallback check (solo cuando la API está offline)
     const localUser = (state.usuarios || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
     if (localUser) {
       loginUser({ id: localUser.id, nombre: localUser.nombre, email: localUser.email, rol: localUser.rol });
-    } else if (email.toLowerCase() === 'admin@cavacontrol.com' && password === 'admin123') {
-      loginUser({ id: 'usr-admin', nombre: 'Administrador', email: 'admin@cavacontrol.com', rol: 'Admin' });
     } else {
       showToast('Credenciales inválidas. Verifique su email y contraseña.', 'error');
     }

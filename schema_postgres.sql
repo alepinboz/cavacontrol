@@ -91,8 +91,3 @@ CREATE TABLE IF NOT EXISTS AuditoriaLogs (
     accion VARCHAR(100) NOT NULL,
     detalle TEXT
 );
-
--- Usuario Administrador por defecto
-INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion)
-VALUES ('usr-admin', 'Administrador', 'admin@cavacontrol.com', 'admin123', 'Admin', '2026-09-07 00:00:00')
-ON CONFLICT (id) DO NOTHING;

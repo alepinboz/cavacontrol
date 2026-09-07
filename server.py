@@ -82,7 +82,6 @@ def init_postgres_tables_if_needed():
         CREATE TABLE IF NOT EXISTS Entradas (id VARCHAR(100) PRIMARY KEY, numero_compra INT NOT NULL, articulo_id VARCHAR(100) NOT NULL, cepa VARCHAR(255), proveedor_id VARCHAR(100) NOT NULL, cantidad_cajas INT NOT NULL, unidades_sumadas INT NOT NULL, precio_caja DOUBLE PRECISION NOT NULL, costo_adicional DOUBLE PRECISION NOT NULL DEFAULT 0, fecha VARCHAR(20));
         CREATE TABLE IF NOT EXISTS Salidas (id VARCHAR(100) PRIMARY KEY, fecha VARCHAR(20), cliente_id VARCHAR(100) NOT NULL, tipo_venta VARCHAR(50) NOT NULL, articulo_id VARCHAR(100) NOT NULL, membresia_id VARCHAR(100), cantidad_botellas INT NOT NULL, detalle VARCHAR(255));
         CREATE TABLE IF NOT EXISTS AuditoriaLogs (id VARCHAR(100) PRIMARY KEY, fecha_hora VARCHAR(50) NOT NULL, usuario VARCHAR(255) NOT NULL, modulo VARCHAR(100) NOT NULL, accion VARCHAR(100) NOT NULL, detalle TEXT);
-        INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES ('usr-admin', 'Administrador', 'admin@cavacontrol.com', 'admin123', 'Admin', '2026-09-07 00:00:00') ON CONFLICT (id) DO NOTHING;
         """
         cursor.execute(schema_sql)
         conn.commit()
@@ -128,11 +127,11 @@ def auth_login():
 
         conn = get_db()
         cursor = conn.cursor()
-        db_execute(cursor, "SELECT id, nombre, email, password, rol FROM Usuarios WHERE LOWER(email) = ?", (email,))
+        db_execute(cursor, "SELECT id, nombre, email, password, rol FROM Usuarios WHERE LOWER(TRIM(email)) = ?", (email,))
         row = cursor.fetchone()
         conn.close()
 
-        if row and row[3] == password:
+        if row and str(row[3]).strip() == password:
             return {
                 "success": True,
                 "user": {
