@@ -2127,13 +2127,32 @@
 
   // 1. CSV Import Proveedores
   document.getElementById('csv-proveedores-file').addEventListener('change', (e) => {
+  function readCsvFileSmart(file, callback) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      let text = evt.target.result || '';
+      if (text.includes('\ufffd')) {
+        const readerIso = new FileReader();
+        readerIso.onload = function (evtIso) {
+          callback(evtIso.target.result || '');
+        };
+        readerIso.readAsText(file, 'ISO-8859-1');
+      } else {
+        callback(text);
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // 1. CSV Import Proveedores
+  document.getElementById('csv-proveedores-file').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function (evt) {
+    readCsvFileSmart(file, (content) => {
       try {
-        const rows = smartParseCSV(evt.target.result);
+        const rows = smartParseCSV(content);
         let count = 0;
 
         rows.forEach(r => {
@@ -2163,8 +2182,7 @@
       } catch (err) {
         showToast('Error procesando el archivo CSV de proveedores', 'error');
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+    });
     e.target.value = '';
   });
 
@@ -2173,10 +2191,9 @@
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function (evt) {
+    readCsvFileSmart(file, (content) => {
       try {
-        const rows = smartParseCSV(evt.target.result);
+        const rows = smartParseCSV(content);
         let rowsProcessedCount = 0;
 
         rows.forEach(r => {
@@ -2238,8 +2255,7 @@
       } catch (err) {
         showToast('Error procesando el archivo CSV de artículos', 'error');
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+    });
     e.target.value = '';
   });
 
@@ -2248,10 +2264,9 @@
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function (evt) {
+    readCsvFileSmart(file, (content) => {
       try {
-        const rows = smartParseCSV(evt.target.result);
+        const rows = smartParseCSV(content);
         let count = 0;
 
         rows.forEach(r => {
@@ -2314,8 +2329,7 @@
       } catch (err) {
         showToast('Error procesando el archivo CSV de clientes', 'error');
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+    });
     e.target.value = '';
   });
 
@@ -2324,10 +2338,9 @@
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function (evt) {
+    readCsvFileSmart(file, (content) => {
       try {
-        const rows = smartParseCSV(evt.target.result);
+        const rows = smartParseCSV(content);
         let count = 0;
 
         rows.forEach(r => {
@@ -2380,8 +2393,7 @@
       } catch (err) {
         showToast('Error procesando el archivo CSV de compras', 'error');
       }
-    };
-    reader.readAsText(file, 'UTF-8');
+    });
     e.target.value = '';
   });
 

@@ -156,9 +156,9 @@ def enable_cors(fn):
 @app.route('/api/health', method=['GET', 'OPTIONS'])
 @enable_cors
 def health():
+    conn = None
     try:
         conn = get_db()
-        conn.close()
         db_type = "Supabase / PostgreSQL (Nube)" if IS_POSTGRES else "SQL Server 2019 (CavaControlDB)"
         db_host = ""
         if IS_POSTGRES and DATABASE_URL:
@@ -169,10 +169,17 @@ def health():
     except Exception as e:
         response.status = 500
         return {"status": "error", "message": str(e)}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/auth/login', method=['POST', 'OPTIONS'])
 @enable_cors
 def auth_login():
+    conn = None
     try:
         data = request.json or json.loads(request.body.read().decode('utf-8'))
         email = (data.get('email') or '').strip().lower()
@@ -183,7 +190,6 @@ def auth_login():
         db_execute(cursor, "SELECT * FROM Usuarios")
         rows = cursor.fetchall()
         col_names = [desc[0].lower() for desc in cursor.description] if cursor.description else []
-        conn.close()
 
         email_idx = col_names.index('email') if 'email' in col_names else 2
         pass_idx = col_names.index('password') if 'password' in col_names else 3
@@ -213,10 +219,17 @@ def auth_login():
         print("ERROR login:", traceback.format_exc())
         response.status = 500
         return {"success": False, "message": f"Error en BD: {str(e)}"}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/auth/register', method=['POST', 'OPTIONS'])
 @enable_cors
 def auth_register():
+    conn = None
     try:
         data = request.json or json.loads(request.body.read().decode('utf-8'))
         nombre = (data.get('nombre') or '').strip()
@@ -231,7 +244,6 @@ def auth_register():
         cursor = conn.cursor()
         db_execute(cursor, "SELECT COUNT(*) FROM Usuarios WHERE LOWER(email) = ?", (email,))
         if cursor.fetchone()[0] > 0:
-            conn.close()
             response.status = 400
             return {"success": False, "message": "El correo ya se encuentra registrado."}
 
@@ -242,7 +254,6 @@ def auth_register():
             (user_id, nombre, email, password, 'Usuario', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         )
         conn.commit()
-        conn.close()
 
         return {
             "success": True,
@@ -257,10 +268,17 @@ def auth_register():
         print("ERROR register:", traceback.format_exc())
         response.status = 500
         return {"success": False, "message": str(e)}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/db', method=['GET', 'OPTIONS'])
 @enable_cors
 def get_full_state():
+    conn = None
     try:
         conn = get_db()
         cursor = conn.cursor()
@@ -363,8 +381,6 @@ def get_full_state():
             "id": str(r[0]), "fechaHora": str(r[1]), "usuario": str(r[2]), "modulo": str(r[3]), "accion": str(r[4]), "detalle": str(r[5] or '')
         } for r in cursor.fetchall()]
 
-        conn.close()
-
         return {
           "usuarios": usuarios,
           "proveedores": proveedores,
@@ -379,6 +395,12 @@ def get_full_state():
         print("ERROR get_full_state:", traceback.format_exc())
         response.status = 500
         return {"error": str(e)}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 @app.route('/api/db/sync', method=['POST', 'OPTIONS'])
 @enable_cors
