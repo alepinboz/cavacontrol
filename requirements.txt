@@ -1,3 +1,4 @@
 bottle>=0.12.25
 pyodbc>=4.0.39
+psycopg2-binary>=2.9.9
 gunicorn>=21.2.0

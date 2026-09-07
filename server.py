@@ -1,31 +1,95 @@
 import json
 import traceback
-import pyodbc
-from bottle import Bottle, request, response, static_file, run
-
 import os
+import datetime
+from bottle import Bottle, request, response, static_file, run
 
 app = Bottle()
 
 PORT = int(os.environ.get('PORT', 3001))
 HOST = os.environ.get('HOST', '0.0.0.0' if os.environ.get('PORT') else 'localhost')
 
-CONN_STR = os.environ.get('DATABASE_URL') or os.environ.get('SQL_CONN_STR') or (
-    "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=. ;"
-    "DATABASE=CavaControlDB;"
-    "TRUSTED_CONNECTION=yes;"
-)
+DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('SQL_CONN_STR') or ""
+
+IS_POSTGRES = False
+if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.startswith('postgresql://')):
+    IS_POSTGRES = True
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
 def get_db():
-    conn = pyodbc.connect(CONN_STR, autocommit=False)
+    if IS_POSTGRES:
+        import psycopg2
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        import pyodbc
+        conn_str = DATABASE_URL or (
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            "SERVER=. ;"
+            "DATABASE=CavaControlDB;"
+            "TRUSTED_CONNECTION=yes;"
+        )
+        conn = pyodbc.connect(conn_str, autocommit=False)
+        try:
+            conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
+            conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+            conn.setencoding(encoding='utf-8')
+        except Exception:
+            pass
+        return conn
+
+def db_execute(cursor, query, params=None):
+    if IS_POSTGRES:
+        query_pg = query.replace('?', '%s')
+        if params is not None:
+            cursor.execute(query_pg, params)
+        else:
+            cursor.execute(query_pg)
+    else:
+        if params is not None:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+
+def db_executemany(cursor, query, params_list):
+    if not params_list:
+        return
+    if IS_POSTGRES:
+        query_pg = query.replace('?', '%s')
+        cursor.executemany(query_pg, params_list)
+    else:
+        cursor.fast_executemany = True
+        cursor.executemany(query, params_list)
+
+def init_postgres_tables_if_needed():
+    if not IS_POSTGRES:
+        return
     try:
-        conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-        conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-        conn.setencoding(encoding='utf-8')
-    except Exception:
-        pass
-    return conn
+        conn = get_db()
+        cursor = conn.cursor()
+        schema_sql = """
+        CREATE TABLE IF NOT EXISTS Usuarios (id VARCHAR(100) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, email VARCHAR(255) NOT NULL UNIQUE, password VARCHAR(255) NOT NULL, rol VARCHAR(50) NOT NULL DEFAULT 'Admin', fecha_creacion VARCHAR(50));
+        CREATE TABLE IF NOT EXISTS Proveedores (id VARCHAR(100) PRIMARY KEY, nombre VARCHAR(255) NOT NULL, telefono VARCHAR(100), email VARCHAR(255));
+        CREATE TABLE IF NOT EXISTS Articulos (id VARCHAR(100) PRIMARY KEY, bodega VARCHAR(255) NOT NULL, etiqueta VARCHAR(255) NOT NULL, cepa VARCHAR(255) NOT NULL, uxb INT NOT NULL DEFAULT 6);
+        CREATE TABLE IF NOT EXISTS ArticuloProveedores (articulo_id VARCHAR(100) NOT NULL, proveedor_id VARCHAR(100) NOT NULL, PRIMARY KEY (articulo_id, proveedor_id));
+        CREATE TABLE IF NOT EXISTS Membresias (id VARCHAR(100) PRIMARY KEY, tipo VARCHAR(100) NOT NULL DEFAULT 'Selección', codigo VARCHAR(50) NOT NULL, descripcion VARCHAR(255) NOT NULL, fecha_desde VARCHAR(20), fecha_hasta VARCHAR(20), precio DOUBLE PRECISION NOT NULL DEFAULT 0, ganancia DOUBLE PRECISION NOT NULL DEFAULT 40);
+        CREATE TABLE IF NOT EXISTS MembresiaItems (membresia_id VARCHAR(100) NOT NULL, articulo_id VARCHAR(100) NOT NULL, cantidad INT NOT NULL DEFAULT 1, PRIMARY KEY (membresia_id, articulo_id));
+        CREATE TABLE IF NOT EXISTS Clientes (id VARCHAR(100) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, apellido VARCHAR(150) NOT NULL, telefono VARCHAR(100), provincia VARCHAR(100), localidad VARCHAR(100), direccion VARCHAR(255), membresia_id VARCHAR(100));
+        CREATE TABLE IF NOT EXISTS Entradas (id VARCHAR(100) PRIMARY KEY, numero_compra INT NOT NULL, articulo_id VARCHAR(100) NOT NULL, cepa VARCHAR(255), proveedor_id VARCHAR(100) NOT NULL, cantidad_cajas INT NOT NULL, unidades_sumadas INT NOT NULL, precio_caja DOUBLE PRECISION NOT NULL, costo_adicional DOUBLE PRECISION NOT NULL DEFAULT 0, fecha VARCHAR(20));
+        CREATE TABLE IF NOT EXISTS Salidas (id VARCHAR(100) PRIMARY KEY, fecha VARCHAR(20), cliente_id VARCHAR(100) NOT NULL, tipo_venta VARCHAR(50) NOT NULL, articulo_id VARCHAR(100) NOT NULL, membresia_id VARCHAR(100), cantidad_botellas INT NOT NULL, detalle VARCHAR(255));
+        CREATE TABLE IF NOT EXISTS AuditoriaLogs (id VARCHAR(100) PRIMARY KEY, fecha_hora VARCHAR(50) NOT NULL, usuario VARCHAR(255) NOT NULL, modulo VARCHAR(100) NOT NULL, accion VARCHAR(100) NOT NULL, detalle TEXT);
+        INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES ('usr-admin', 'Administrador', 'admin@cavacontrol.com', 'admin123', 'Admin', '2026-09-07 00:00:00') ON CONFLICT (id) DO NOTHING;
+        """
+        cursor.execute(schema_sql)
+        conn.commit()
+        conn.close()
+        print("Tablas de PostgreSQL (Supabase/Neon) inicializadas automáticamente.")
+    except Exception as e:
+        print("Aviso inicializando tablas PostgreSQL:", e)
+
+# Auto-initialize PostgreSQL tables if connected to PostgreSQL
+init_postgres_tables_if_needed()
 
 def enable_cors(fn):
     def _enable_cors(*args, **kwargs):
@@ -37,7 +101,7 @@ def enable_cors(fn):
         return fn(*args, **kwargs)
     return _enable_cors
 
-# --- API ENDPOINTS (MUST BE DEFINED BEFORE WILDCARD STATIC ROUTES) ---
+# --- API ENDPOINTS ---
 
 @app.route('/api/health', method=['GET', 'OPTIONS'])
 @enable_cors
@@ -45,7 +109,8 @@ def health():
     try:
         conn = get_db()
         conn.close()
-        return {"status": "ok", "db": "SQL Server 2019 (CavaControlDB)"}
+        db_type = "Supabase / PostgreSQL (Nube)" if IS_POSTGRES else "SQL Server 2019 (CavaControlDB)"
+        return {"status": "ok", "db": db_type}
     except Exception as e:
         response.status = 500
         return {"status": "error", "message": str(e)}
@@ -60,7 +125,7 @@ def auth_login():
 
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nombre, email, password, rol FROM Usuarios WHERE LOWER(email) = ?", (email,))
+        db_execute(cursor, "SELECT id, nombre, email, password, rol FROM Usuarios WHERE LOWER(email) = ?", (email,))
         row = cursor.fetchone()
         conn.close()
 
@@ -97,16 +162,17 @@ def auth_register():
 
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM Usuarios WHERE LOWER(email) = ?", (email,))
+        db_execute(cursor, "SELECT COUNT(*) FROM Usuarios WHERE LOWER(email) = ?", (email,))
         if cursor.fetchone()[0] > 0:
             conn.close()
             response.status = 400
             return {"success": False, "message": "El correo ya se encuentra registrado."}
 
-        user_id = f"usr-{int(pyodbc.datetime.datetime.now().timestamp()*1000)}"
-        cursor.execute(
+        user_id = f"usr-{int(datetime.datetime.now().timestamp()*1000)}"
+        db_execute(
+            cursor,
             "INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, nombre, email, password, 'Usuario', pyodbc.datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            (user_id, nombre, email, password, 'Usuario', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         )
         conn.commit()
         conn.close()
@@ -133,18 +199,18 @@ def get_full_state():
         cursor = conn.cursor()
 
         # Usuarios
-        cursor.execute("SELECT id, nombre, email, password, rol, fecha_creacion FROM Usuarios")
+        db_execute(cursor, "SELECT id, nombre, email, password, rol, fecha_creacion FROM Usuarios")
         usuarios = [{"id": str(r[0]), "nombre": str(r[1]), "email": str(r[2]), "password": str(r[3]), "rol": str(r[4]), "fechaCreacion": str(r[5] or '')} for r in cursor.fetchall()]
 
         # Proveedores
-        cursor.execute("SELECT id, nombre, telefono, email FROM Proveedores")
+        db_execute(cursor, "SELECT id, nombre, telefono, email FROM Proveedores")
         proveedores = [{"id": str(r[0]), "nombre": str(r[1]), "telefono": str(r[2] or ''), "email": str(r[3] or '')} for r in cursor.fetchall()]
 
         # Articulos + Proveedores
-        cursor.execute("SELECT id, bodega, etiqueta, cepa, uxb FROM Articulos")
+        db_execute(cursor, "SELECT id, bodega, etiqueta, cepa, uxb FROM Articulos")
         articulos_rows = cursor.fetchall()
         
-        cursor.execute("SELECT articulo_id, proveedor_id FROM ArticuloProveedores")
+        db_execute(cursor, "SELECT articulo_id, proveedor_id FROM ArticuloProveedores")
         art_provs_map = {}
         for r in cursor.fetchall():
             art_provs_map.setdefault(str(r[0]), []).append(str(r[1]))
@@ -162,10 +228,10 @@ def get_full_state():
             })
 
         # Membresias + Items + Tipo + Precio
-        cursor.execute("SELECT id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio FROM Membresias")
+        db_execute(cursor, "SELECT id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio FROM Membresias")
         membresias_rows = cursor.fetchall()
 
-        cursor.execute("SELECT membresia_id, articulo_id, cantidad FROM MembresiaItems")
+        db_execute(cursor, "SELECT membresia_id, articulo_id, cantidad FROM MembresiaItems")
         memb_items_map = {}
         for r in cursor.fetchall():
             memb_items_map.setdefault(str(r[0]), []).append({"articuloId": str(r[1]), "cantidad": int(r[2])})
@@ -186,14 +252,14 @@ def get_full_state():
             })
 
         # Clientes
-        cursor.execute("SELECT id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id FROM Clientes")
+        db_execute(cursor, "SELECT id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id FROM Clientes")
         clientes = [{
             "id": str(r[0]), "nombre": str(r[1]), "apellido": str(r[2]), "telefono": str(r[3] or ''),
             "provincia": str(r[4] or ''), "localidad": str(r[5] or ''), "direccion": str(r[6] or ''), "membresiaId": str(r[7] or '')
         } for r in cursor.fetchall()]
 
         # Entradas
-        cursor.execute("SELECT id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha FROM Entradas")
+        db_execute(cursor, "SELECT id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha FROM Entradas")
         entradas = [{
             "id": str(r[0]), "numeroCompra": int(r[1]), "articuloId": str(r[2]), "cepa": str(r[3] or ''),
             "proveedorId": str(r[4]), "cantidadCajas": int(r[5]), "unidadesSumadas": int(r[6]),
@@ -201,14 +267,14 @@ def get_full_state():
         } for r in cursor.fetchall()]
 
         # Salidas
-        cursor.execute("SELECT id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle FROM Salidas")
+        db_execute(cursor, "SELECT id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle FROM Salidas")
         salidas = [{
             "id": str(r[0]), "fecha": str(r[1] or ''), "clienteId": str(r[2]), "tipoVenta": str(r[3]),
             "articuloId": str(r[4]), "membresiaId": str(r[5] or ''), "cantidadBotellas": int(r[6]), "detalle": str(r[7] or '')
         } for r in cursor.fetchall()]
 
         # AuditoriaLogs
-        cursor.execute("SELECT id, fecha_hora, usuario, modulo, accion, detalle FROM AuditoriaLogs ORDER BY fecha_hora DESC")
+        db_execute(cursor, "SELECT id, fecha_hora, usuario, modulo, accion, detalle FROM AuditoriaLogs ORDER BY fecha_hora DESC")
         auditoriaLogs = [{
             "id": str(r[0]), "fechaHora": str(r[1]), "usuario": str(r[2]), "modulo": str(r[3]), "accion": str(r[4]), "detalle": str(r[5] or '')
         } for r in cursor.fetchall()]
@@ -242,35 +308,33 @@ def sync_full_state():
         cursor = conn.cursor()
 
         # Clear existing tables in safe order
-        cursor.execute("DELETE FROM AuditoriaLogs;")
-        cursor.execute("DELETE FROM Salidas;")
-        cursor.execute("DELETE FROM Entradas;")
-        cursor.execute("DELETE FROM Clientes;")
-        cursor.execute("DELETE FROM MembresiaItems;")
-        cursor.execute("DELETE FROM Membresias;")
-        cursor.execute("DELETE FROM ArticuloProveedores;")
-        cursor.execute("DELETE FROM Articulos;")
-        cursor.execute("DELETE FROM Proveedores;")
-        cursor.execute("DELETE FROM Usuarios;")
-
-        cursor.fast_executemany = True
+        db_execute(cursor, "DELETE FROM AuditoriaLogs;")
+        db_execute(cursor, "DELETE FROM Salidas;")
+        db_execute(cursor, "DELETE FROM Entradas;")
+        db_execute(cursor, "DELETE FROM Clientes;")
+        db_execute(cursor, "DELETE FROM MembresiaItems;")
+        db_execute(cursor, "DELETE FROM Membresias;")
+        db_execute(cursor, "DELETE FROM ArticuloProveedores;")
+        db_execute(cursor, "DELETE FROM Articulos;")
+        db_execute(cursor, "DELETE FROM Proveedores;")
+        db_execute(cursor, "DELETE FROM Usuarios;")
 
         # 0. Usuarios Bulk Insert
         usr_rows = [(str(u['id']), str(u['nombre'])[:150], str(u['email'])[:255], str(u.get('password', '123456'))[:255], str(u.get('rol', 'Usuario'))[:50], str(u.get('fechaCreacion', ''))[:50]) for u in data.get('usuarios', [])]
         if usr_rows:
-            cursor.executemany("INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?)", usr_rows)
+            db_executemany(cursor, "INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?)", usr_rows)
 
         # 1. Proveedores Bulk Insert
         prov_rows = [(str(p['id']), str(p['nombre'])[:255], str(p.get('telefono', ''))[:100], str(p.get('email', ''))[:255]) for p in data.get('proveedores', [])]
         if prov_rows:
-            cursor.executemany("INSERT INTO Proveedores (id, nombre, telefono, email) VALUES (?, ?, ?, ?)", prov_rows)
+            db_executemany(cursor, "INSERT INTO Proveedores (id, nombre, telefono, email) VALUES (?, ?, ?, ?)", prov_rows)
 
         valid_prov_ids = {p[0] for p in prov_rows}
 
         # 2. Articulos & ArticuloProveedores Bulk Insert
         art_rows = [(str(a['id']), str(a['bodega'])[:255], str(a['etiqueta'])[:255], str(a['cepa'])[:255], int(a.get('uxb', 6))) for a in data.get('articulos', [])]
         if art_rows:
-            cursor.executemany("INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb) VALUES (?, ?, ?, ?, ?)", art_rows)
+            db_executemany(cursor, "INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb) VALUES (?, ?, ?, ?, ?)", art_rows)
 
         art_prov_rows = []
         for a in data.get('articulos', []):
@@ -282,12 +346,12 @@ def sync_full_state():
                     seen_pids.add(pid_str)
                     art_prov_rows.append((art_id, pid_str))
         if art_prov_rows:
-            cursor.executemany("INSERT INTO ArticuloProveedores (articulo_id, proveedor_id) VALUES (?, ?)", art_prov_rows)
+            db_executemany(cursor, "INSERT INTO ArticuloProveedores (articulo_id, proveedor_id) VALUES (?, ?)", art_prov_rows)
 
         # 3. Membresias & MembresiaItems Bulk Insert (con tipo y precio)
         memb_rows = [(str(m['id']), str(m['codigo'])[:50], str(m['descripcion'])[:255], str(m.get('fechaDesde', ''))[:20], str(m.get('fechaHasta', ''))[:20], float(m.get('ganancia', 40)), str(m.get('tipo', 'Selección'))[:100], float(m.get('precio', 0))) for m in data.get('membresias', [])]
         if memb_rows:
-            cursor.executemany("INSERT INTO Membresias (id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", memb_rows)
+            db_executemany(cursor, "INSERT INTO Membresias (id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", memb_rows)
 
         memb_items_rows = []
         for m in data.get('membresias', []):
@@ -302,39 +366,40 @@ def sync_full_state():
                     seen_items.add(art_id_str)
                     memb_items_rows.append((m_id, art_id_str, int(item.get('cantidad', 1))))
         if memb_items_rows:
-            cursor.executemany("INSERT INTO MembresiaItems (membresia_id, articulo_id, cantidad) VALUES (?, ?, ?)", memb_items_rows)
+            db_executemany(cursor, "INSERT INTO MembresiaItems (membresia_id, articulo_id, cantidad) VALUES (?, ?, ?)", memb_items_rows)
 
         # 4. Clientes Bulk Insert
         cli_rows = [(str(c['id']), str(c['nombre'])[:150], str(c['apellido'])[:150], str(c.get('telefono', ''))[:100], str(c.get('provincia', ''))[:100], str(c.get('localidad', ''))[:100], str(c.get('direccion', ''))[:255], str(c.get('membresiaId', ''))[:100]) for c in data.get('clientes', [])]
         if cli_rows:
-            cursor.executemany("INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
+            db_executemany(cursor, "INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
 
         # 5. Entradas Bulk Insert
         ent_rows = [(str(e['id']), int(e['numeroCompra']), str(e['articuloId']), str(e.get('cepa', ''))[:255], str(e['proveedorId']), int(e['cantidadCajas']), int(e['unidadesSumadas']), float(e['precioCaja']), float(e.get('costoAdicionalCaja', 0)), str(e.get('fecha', ''))[:20]) for e in data.get('entradas', [])]
         if ent_rows:
-            cursor.executemany("INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
+            db_executemany(cursor, "INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
 
         # 6. Salidas Bulk Insert
         sal_rows = [(str(s['id']), str(s.get('fecha', ''))[:20], str(s['clienteId']), str(s['tipoVenta'])[:50], str(s['articuloId']), str(s.get('membresiaId', ''))[:100] if s.get('membresiaId') else None, int(s['cantidadBotellas']), str(s.get('detalle', ''))[:255]) for s in data.get('salidas', [])]
         if sal_rows:
-            cursor.executemany("INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
+            db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
 
         # 7. AuditoriaLogs Bulk Insert
         audit_rows = [(str(log['id']), str(log['fechaHora'])[:50], str(log['usuario'])[:255], str(log['modulo'])[:100], str(log['accion'])[:100], str(log.get('detalle', ''))) for log in data.get('auditoriaLogs', [])]
         if audit_rows:
-            cursor.executemany("INSERT INTO AuditoriaLogs (id, fecha_hora, usuario, modulo, accion, detalle) VALUES (?, ?, ?, ?, ?, ?)", audit_rows)
+            db_executemany(cursor, "INSERT INTO AuditoriaLogs (id, fecha_hora, usuario, modulo, accion, detalle) VALUES (?, ?, ?, ?, ?, ?)", audit_rows)
 
         conn.commit()
         conn.close()
 
-        return {"success": True, "message": "Datos sincronizados masivamente a alta velocidad en SQL Server 2019 (CavaControlDB)"}
+        db_name_str = "Supabase / PostgreSQL" if IS_POSTGRES else "SQL Server 2019"
+        return {"success": True, "message": f"Datos sincronizados masivamente a alta velocidad en {db_name_str}"}
 
     except Exception as e:
-        print("ERROR DURANTE SYNC BULK SQL SERVER:", traceback.format_exc())
+        print("ERROR DURANTE SYNC BULK DB:", traceback.format_exc())
         response.status = 500
         return {"error": str(e)}
 
-# --- STATIC FILE ROUTES (MUST BE AT THE END) ---
+# --- STATIC FILE ROUTES ---
 
 @app.route('/<filename:path>', method=['GET', 'OPTIONS'])
 @enable_cors

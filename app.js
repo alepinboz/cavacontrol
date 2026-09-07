@@ -6,9 +6,8 @@
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'cavacontrol_db_v1';
-  const SESSION_USER_KEY = 'cavacontrol_current_user';
-  const API_URL = 'http://localhost:3001/api';
+  const isLocalEnv = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (window.location.port === '3001' || window.location.port === '5500' || window.location.port === '8080');
+  const API_URL = isLocalEnv ? 'http://localhost:3001/api' : `${window.location.origin}/api`;
 
   let state = {
     usuarios: [],
@@ -345,16 +344,18 @@
     const text = document.getElementById('sql-status-text');
     if (!badge || !text) return;
 
+    const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
     if (connected) {
       badge.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
       badge.style.color = '#10b981';
       badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-      text.textContent = 'SQL Server 2019: Conectado';
+      text.textContent = isCloud ? 'Base de Datos Nube: Conectado' : 'SQL Server 2019: Conectado';
     } else {
       badge.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
       badge.style.color = '#f59e0b';
       badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-      text.textContent = 'SQL Server 2019: Offline (Modo Cache Local)';
+      text.textContent = isCloud ? 'Base de Datos Nube: Offline (Cache)' : 'SQL Server 2019: Offline (Cache)';
     }
   }
 
