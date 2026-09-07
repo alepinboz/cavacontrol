@@ -379,7 +379,8 @@
       try {
         const res = await fetch(`${API_URL}/health?t=${Date.now()}`);
         const data = await res.json();
-        showToast(`API: ${API_URL} | BD: ${data.db || 'Desconocida'}`, 'info');
+        const hostInfo = data.host ? ` (${data.host})` : '';
+        showToast(`API: ${API_URL} | BD: ${data.db || 'Desconocida'}${hostInfo}`, 'info');
       } catch (e) {
         showToast(`API: ${API_URL} | Error: ${e.message}`, 'error');
       }

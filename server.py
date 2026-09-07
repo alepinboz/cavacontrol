@@ -112,7 +112,12 @@ def health():
         conn = get_db()
         conn.close()
         db_type = "Supabase / PostgreSQL (Nube)" if IS_POSTGRES else "SQL Server 2019 (CavaControlDB)"
-        return {"status": "ok", "db": db_type}
+        db_host = ""
+        if IS_POSTGRES and DATABASE_URL:
+            from urllib.parse import urlparse
+            parsed = urlparse(DATABASE_URL)
+            db_host = parsed.hostname or ""
+        return {"status": "ok", "db": db_type, "host": db_host}
     except Exception as e:
         response.status = 500
         return {"status": "error", "message": str(e)}
