@@ -41,8 +41,7 @@ def safe_str(val, max_len=None):
         s = ''
     else:
         s = str(val)
-    # Sanitize invalid unicode replacement chars and null bytes
-    s = s.replace('\ufffd', 'N' if 'SUE' in s or 'SUE' in s.upper() else 'E' if 'ALMAC' in s or 'ALMAC' in s.upper() else '').replace('\x00', '')
+    s = s.replace('\x00', '')
     try:
         s = s.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
     except Exception:
@@ -50,6 +49,22 @@ def safe_str(val, max_len=None):
     if max_len:
         return s[:max_len]
     return s
+
+def deduplicate_rows_by_id(rows_list, id_index=0):
+    seen_ids = set()
+    unique_rows = []
+    for r in rows_list:
+        row_id = r[id_index]
+        if not row_id:
+            continue
+        if row_id in seen_ids:
+            r_list = list(r)
+            row_id = f"{row_id}-{len(seen_ids)+1}"
+            r_list[id_index] = row_id
+            r = tuple(r_list)
+        seen_ids.add(row_id)
+        unique_rows.append(r)
+    return unique_rows
 
 def get_db():
     if IS_POSTGRES:
@@ -98,8 +113,13 @@ def db_executemany(cursor, query, params_list):
         return
     if IS_POSTGRES:
         query_pg = query.replace('?', '%s')
-        for p in params_list:
-            cursor.execute(query_pg, p)
+        try:
+            import psycopg2.extras
+            psycopg2.extras.execute_batch(cursor, query_pg, params_list, page_size=200)
+        except Exception as e:
+            print("Fallback execute_batch warning:", e)
+            for p in params_list:
+                cursor.execute(query_pg, p)
     else:
         cursor.fast_executemany = True
         cursor.executemany(query, params_list)
@@ -447,6 +467,7 @@ def sync_full_state():
                 safe_str(u.get('rol', 'Usuario'), 50),
                 safe_str(u.get('fechaCreacion', ''), 50)
             ) for u in data.get('usuarios', []) if u.get('id')]
+            usr_rows = deduplicate_rows_by_id(usr_rows)
             if usr_rows:
                 db_executemany(cursor, "INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?)", usr_rows)
 
@@ -457,6 +478,7 @@ def sync_full_state():
             safe_str(p.get('telefono', ''), 100),
             safe_str(p.get('email', ''), 255)
         ) for p in data.get('proveedores', []) if p.get('id')]
+        prov_rows = deduplicate_rows_by_id(prov_rows)
         if prov_rows:
             db_executemany(cursor, "INSERT INTO Proveedores (id, nombre, telefono, email) VALUES (?, ?, ?, ?)", prov_rows)
 
@@ -470,6 +492,7 @@ def sync_full_state():
             safe_str(a.get('cepa'), 255),
             safe_int(a.get('uxb'), 6)
         ) for a in data.get('articulos', []) if a.get('id')]
+        art_rows = deduplicate_rows_by_id(art_rows)
         if art_rows:
             db_executemany(cursor, "INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb) VALUES (?, ?, ?, ?, ?)", art_rows)
 
@@ -500,6 +523,7 @@ def sync_full_state():
             safe_str(m.get('tipo', 'Selección'), 100),
             safe_float(m.get('precio'), 0.0)
         ) for m in data.get('membresias', []) if m.get('id')]
+        memb_rows = deduplicate_rows_by_id(memb_rows)
         if memb_rows:
             db_executemany(cursor, "INSERT INTO Membresias (id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", memb_rows)
 
@@ -533,6 +557,7 @@ def sync_full_state():
             safe_str(c.get('direccion', ''), 255),
             safe_str(c.get('membresiaId'), 100) if c.get('membresiaId') and safe_str(c.get('membresiaId')) in valid_memb_ids else None
         ) for c in data.get('clientes', []) if c.get('id')]
+        cli_rows = deduplicate_rows_by_id(cli_rows)
         if cli_rows:
             db_executemany(cursor, "INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
 
@@ -551,6 +576,7 @@ def sync_full_state():
             safe_float(e.get('costoAdicionalCaja'), 0.0),
             safe_str(e.get('fecha', ''), 20)
         ) for e in data.get('entradas', []) if e.get('id') and safe_str(e.get('articuloId')) in valid_art_ids and safe_str(e.get('proveedorId')) in valid_prov_ids]
+        ent_rows = deduplicate_rows_by_id(ent_rows)
         if ent_rows:
             db_executemany(cursor, "INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
 
@@ -565,6 +591,7 @@ def sync_full_state():
             safe_int(s.get('cantidadBotellas'), 1),
             safe_str(s.get('detalle', ''), 255)
         ) for s in data.get('salidas', []) if s.get('id') and safe_str(s.get('clienteId')) in valid_cli_ids and safe_str(s.get('articuloId')) in valid_art_ids]
+        sal_rows = deduplicate_rows_by_id(sal_rows)
         if sal_rows:
             db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
 
@@ -577,6 +604,7 @@ def sync_full_state():
             safe_str(log.get('accion', ''), 100),
             safe_str(log.get('detalle', ''))
         ) for log in data.get('auditoriaLogs', []) if log.get('id')]
+        audit_rows = deduplicate_rows_by_id(audit_rows)
         if audit_rows:
             db_executemany(cursor, "INSERT INTO AuditoriaLogs (id, fecha_hora, usuario, modulo, accion, detalle) VALUES (?, ?, ?, ?, ?, ?)", audit_rows)
 
@@ -587,7 +615,8 @@ def sync_full_state():
         return {"success": True, "message": f"Datos sincronizados masivamente a alta velocidad en {db_name_str}"}
 
     except Exception as e:
-        print("ERROR DURANTE SYNC BULK DB:", traceback.format_exc())
+        err_trace = traceback.format_exc().encode('ascii', 'backslashreplace').decode('ascii')
+        print("ERROR DURANTE SYNC BULK DB:", err_trace)
         if conn:
             try:
                 conn.rollback()
