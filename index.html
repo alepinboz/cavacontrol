@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CavaControl - Gestión de Emprendimiento de Vinos</title>
+  <!-- Google Fonts: Inter & Playfair Display -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- LOGIN SCREEN OVERLAY -->
+  <div id="login-overlay" class="login-overlay active">
+    <div class="login-card shadow-lg">
+      <div class="login-header">
+        <div class="login-brand-icon">
+          <i data-lucide="wine"></i>
+        </div>
+        <h2>CavaControl</h2>
+        <p class="text-muted">Acceso al Sistema de Gestión de Vinos</p>
+      </div>
+
+      <div class="login-tabs">
+        <button id="tab-login-btn" type="button" class="login-tab-btn active">Iniciar Sesión</button>
+        <button id="tab-register-btn" type="button" class="login-tab-btn">Registrarse</button>
+      </div>
+
+      <!-- FORM INICIAR SESIÓN -->
+      <form id="form-login" class="login-form" onsubmit="return false;">
+        <div class="form-group">
+          <label><i data-lucide="mail"></i> Correo Electrónico</label>
+          <input type="email" id="login-email" class="form-control" required placeholder="admin@cavacontrol.com" value="admin@cavacontrol.com">
+        </div>
+        <div class="form-group">
+          <label><i data-lucide="key"></i> Contraseña</label>
+          <input type="password" id="login-password" class="form-control" required placeholder="••••••••" value="admin123">
+        </div>
+        <button type="button" id="btn-login-submit" class="btn btn-primary full-width btn-lg">
+          <i data-lucide="log-in"></i> Ingresar al Sistema
+        </button>
+        <p class="login-hint text-center text-muted mt-2" style="font-size: 0.8rem;">
+          Acceso demo por defecto: <strong>admin@cavacontrol.com</strong> / <strong>admin123</strong>
+        </p>
+      </form>
+
+      <!-- FORM REGISTRO -->
+      <form id="form-register" class="login-form" style="display: none;" onsubmit="return false;">
+        <div class="form-group">
+          <label><i data-lucide="user"></i> Nombre Completo</label>
+          <input type="text" id="reg-nombre" class="form-control" required placeholder="Ej: Alejandro Bozzolo">
+        </div>
+        <div class="form-group">
+          <label><i data-lucide="mail"></i> Correo Electrónico</label>
+          <input type="email" id="reg-email" class="form-control" required placeholder="usuario@bodega.com">
+        </div>
+        <div class="form-group">
+          <label><i data-lucide="key"></i> Contraseña</label>
+          <input type="password" id="reg-password" class="form-control" required placeholder="••••••••">
+        </div>
+        <button type="button" id="btn-register-submit" class="btn btn-emerald full-width btn-lg">
+          <i data-lucide="user-plus"></i> Crear Cuenta
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-lucide="wine"></i>
+        </div>
+        <div class="brand-text">
+          <h1>CavaControl</h1>
+          <span class="brand-subtitle">Gestión de Vinos</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-btn active" data-tab="dashboard">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-btn" data-tab="membresias">
+          <i data-lucide="award"></i>
+          <span>Membresías</span>
+        </button>
+        <button class="nav-btn" data-tab="proveedores">
+          <i data-lucide="truck"></i>
+          <span>Proveedores</span>
+        </button>
+        <button class="nav-btn" data-tab="clientes">
+          <i data-lucide="users"></i>
+          <span>Clientes</span>
+        </button>
+        <button class="nav-btn" data-tab="articulos">
+          <i data-lucide="wine"></i>
+          <span>Artículos</span>
+        </button>
+        <button class="nav-btn" data-tab="entradas">
+          <i data-lucide="package-plus"></i>
+          <span>Entradas</span>
+        </button>
+        <button class="nav-btn" data-tab="stock">
+          <i data-lucide="boxes"></i>
+          <span>Stock</span>
+        </button>
+        <button class="nav-btn" data-tab="salidas">
+          <i data-lucide="package-minus"></i>
+          <span>Salidas</span>
+        </button>
+        <button class="nav-btn" data-tab="auditoria">
+          <i data-lucide="shield-check"></i>
+          <span>Auditoría (Logs)</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="backup-actions">
+          <button id="btn-export-json" class="btn btn-icon-text btn-ghost" title="Exportar Backup JSON">
+            <i data-lucide="download"></i> Exportar
+          </button>
+          <label id="btn-import-label" class="btn btn-icon-text btn-ghost" title="Importar Backup JSON">
+            <i data-lucide="upload"></i> Importar
+            <input type="file" id="import-json-file" accept=".json" style="display: none;">
+          </label>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-title">
+          <h2 id="page-title">Dashboard</h2>
+          <p id="page-subtitle" class="text-muted">Resumen general del emprendimiento de vinos</p>
+        </div>
+        <div class="header-actions">
+          <span class="current-date-badge" id="sql-status-badge" style="margin-right: 0.5rem; background-color: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+            <i data-lucide="database"></i> <span id="sql-status-text">SQL Server 2019: Conectado</span>
+          </span>
+          <span class="current-date-badge" id="user-badge" style="margin-right: 0.5rem; background-color: rgba(99, 102, 241, 0.15); color: #818cf8; border-color: rgba(99, 102, 241, 0.3);">
+            <i data-lucide="user-check"></i> <span id="user-name-text">admin@cavacontrol.com</span>
+          </span>
+          <button id="btn-logout" class="btn btn-outline btn-sm text-rose" style="padding: 0.3rem 0.6rem;" title="Cerrar Sesión">
+            <i data-lucide="log-out"></i> Salir
+          </button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="content-body">
+        
+        <!-- DASHBOARD VIEW -->
+        <section id="view-dashboard" class="view-section active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon bg-wine">
+                <i data-lucide="dollar-sign"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Valorización de Stock</span>
+                <h3 class="stat-value" id="dash-val-stock">$0</h3>
+                <span class="stat-subtext" id="dash-sub-stock">0 botellas en cava</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon bg-gold">
+                <i data-lucide="award"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Membresías Vigentes</span>
+                <h3 class="stat-value" id="dash-memb-vigentes">0</h3>
+                <span class="stat-subtext" id="dash-sub-memb">0 clientes asociados</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon bg-emerald">
+                <i data-lucide="shopping-bag"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Compras Realizadas</span>
+                <h3 class="stat-value" id="dash-total-entradas">0</h3>
+                <span class="stat-subtext" id="dash-sub-entradas">$0 invertidos</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon bg-purple">
+                <i data-lucide="send"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Entregas Realizadas</span>
+                <h3 class="stat-value" id="dash-total-salidas">0</h3>
+                <span class="stat-subtext" id="dash-sub-salidas">botellas entregadas</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="card shadow-sm">
+              <div class="card-header">
+                <h3><i data-lucide="clock"></i> Últimos Movimientos de Stock</h3>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table" id="table-dash-movements">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Detalle / Vino</th>
+                        <th>Cantidad</th>
+                        <th>Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-dash-movements">
+                      <tr><td colspan="4" class="text-center text-muted">Sin movimientos registrados</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm">
+              <div class="card-header">
+                <h3><i data-lucide="alert-triangle"></i> Alertas de Stock Bajo (&le; 6 unidades)</h3>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table" id="table-dash-alerts">
+                    <thead>
+                      <tr>
+                        <th>Vino</th>
+                        <th>Cepa</th>
+                        <th>Stock Actual</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-dash-alerts">
+                      <tr><td colspan="4" class="text-center text-muted">No hay productos con stock crítico</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MEMBRESÍAS VIEW -->
+        <section id="view-membresias" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-membresias" placeholder="Buscar por tipo, código o descripción...">
+            </div>
+            <button class="btn btn-primary" id="btn-add-membresia">
+              <i data-lucide="plus"></i> Nueva Membresía
+            </button>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Vinos Incluidos (Artículos y Cantidades)</th>
+                    <th>Total Botellas</th>
+                    <th>Vigencia</th>
+                    <th>Precio ($)</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-membresias">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- PROVEEDORES VIEW -->
+        <section id="view-proveedores" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-proveedores" placeholder="Buscar proveedor...">
+            </div>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+              <label class="btn btn-secondary" title="Importar proveedores desde CSV/TXT">
+                <i data-lucide="file-up"></i> Importar CSV
+                <input type="file" id="csv-proveedores-file" accept=".csv,.txt" style="display:none;">
+              </label>
+              <button class="btn btn-primary" id="btn-add-proveedor">
+                <i data-lucide="plus"></i> Nuevo Proveedor
+              </button>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Teléfono</th>
+                    <th>Email</th>
+                    <th>Compras Realizadas <span class="badge-info">Auto</span></th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-proveedores">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- CLIENTES VIEW -->
+        <section id="view-clientes" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-clientes" placeholder="Buscar cliente por nombre o teléfono...">
+            </div>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+              <label class="btn btn-secondary" title="Importar clientes desde CSV/TXT">
+                <i data-lucide="file-up"></i> Importar CSV
+                <input type="file" id="csv-clientes-file" accept=".csv,.txt" style="display:none;">
+              </label>
+              <button class="btn btn-primary" id="btn-add-cliente">
+                <i data-lucide="plus"></i> Nuevo Cliente
+              </button>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Nombre y Apellido</th>
+                    <th>Teléfono</th>
+                    <th>Ubicación</th>
+                    <th>Dirección</th>
+                    <th>Membresía Asignada</th>
+                    <th>Entregas Históricas <span class="badge-info">Auto</span></th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-clientes">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ARTÍCULOS VIEW -->
+        <section id="view-articulos" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-articulos" placeholder="Buscar por bodega, etiqueta o cepa...">
+            </div>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+              <label class="btn btn-secondary" title="Importar artículos desde CSV/TXT">
+                <i data-lucide="file-up"></i> Importar CSV
+                <input type="file" id="csv-articulos-file" accept=".csv,.txt" style="display:none;">
+              </label>
+              <button class="btn btn-primary" id="btn-add-articulo">
+                <i data-lucide="plus"></i> Nuevo Artículo
+              </button>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Bodega</th>
+                    <th>Etiqueta</th>
+                    <th>Cepa</th>
+                    <th>UxB</th>
+                    <th>Proveedores Autorizados</th>
+                    <th>Último Costo Unit.</th>
+                    <th>Stock Unidades</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-articulos">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ENTRADAS VIEW -->
+        <section id="view-entradas" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-entradas" placeholder="Buscar por N° compra, artículo o proveedor...">
+            </div>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+              <label class="btn btn-secondary" title="Importar compras (entradas) desde CSV/TXT">
+                <i data-lucide="file-up"></i> Importar CSV
+                <input type="file" id="csv-entradas-file" accept=".csv,.txt" style="display:none;">
+              </label>
+              <button class="btn btn-primary" id="btn-add-entrada">
+                <i data-lucide="plus"></i> Nueva Compra (Entrada)
+              </button>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>N° Compra</th>
+                    <th>Artículo</th>
+                    <th>Cepa</th>
+                    <th>Proveedor</th>
+                    <th>Cajas</th>
+                    <th>Unid. Sumadas</th>
+                    <th>Precio / Caja</th>
+                    <th>Costo Adic. / Caja</th>
+                    <th>Costo Unit. Botella</th>
+                    <th>Total Compra</th>
+                    <th>Fecha</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-entradas">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- STOCK VIEW -->
+        <section id="view-stock" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-stock" placeholder="Filtrar por bodega, etiqueta o cepa...">
+            </div>
+            <div class="stock-summary-badge">
+              <span>Total Valorizado: <strong id="stock-total-val">$0</strong></span>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Bodega</th>
+                    <th>Etiqueta</th>
+                    <th>Cepa</th>
+                    <th>UxB</th>
+                    <th>Stock Unidades</th>
+                    <th>Cajas Equiv.</th>
+                    <th>Último Precio Caja</th>
+                    <th>Costo Adic. Caja</th>
+                    <th>Último Costo Unit. Botella</th>
+                    <th>Costo Total Valorizado</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-stock">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- SALIDAS VIEW -->
+        <section id="view-salidas" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-salidas" placeholder="Buscar por cliente o tipo...">
+            </div>
+            <button class="btn btn-primary" id="btn-add-salida">
+              <i data-lucide="plus"></i> Nueva Venta / Entrega
+            </button>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Tipo de Venta</th>
+                    <th>Detalle / Artículo</th>
+                    <th>Cantidad Botellas</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-salidas">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- AUDITORÍA / MONITOR DE MOVIMIENTOS VIEW -->
+        <section id="view-auditoria" class="view-section">
+          <div class="section-toolbar">
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" id="search-auditoria" placeholder="Buscar en logs por usuario, acción o detalle...">
+            </div>
+            <div class="toolbar-actions">
+              <select id="filter-auditoria-modulo" class="form-control" style="width: auto;">
+                <option value="">-- Todos los Módulos --</option>
+                <option value="Auth">Autenticación</option>
+                <option value="Proveedores">Proveedores</option>
+                <option value="Artículos">Artículos</option>
+                <option value="Membresías">Membresías</option>
+                <option value="Clientes">Clientes</option>
+                <option value="Entradas">Entradas / Compras</option>
+                <option value="Salidas">Salidas / Ventas</option>
+                <option value="Sistema">Sistema</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card shadow-sm">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Fecha y Hora</th>
+                    <th>Usuario</th>
+                    <th>Módulo</th>
+                    <th>Acción Ejecutada</th>
+                    <th>Detalle / Registro Afectado</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-auditoria">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL DIALOG CONTAINER -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-card shadow-lg" id="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">Título Modal</h3>
+        <button class="btn-close" id="btn-modal-close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Dynamic Form Fields -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js?v=4.4"></script>
+</body>
+</html>
