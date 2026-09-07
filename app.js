@@ -374,18 +374,28 @@
 
     const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
+    badge.style.cursor = 'pointer';
+    badge.onclick = async () => {
+      try {
+        const res = await fetch(`${API_URL}/health?t=${Date.now()}`);
+        const data = await res.json();
+        showToast(`API: ${API_URL} | BD: ${data.db || 'Desconocida'}`, 'info');
+      } catch (e) {
+        showToast(`API: ${API_URL} | Error: ${e.message}`, 'error');
+      }
+    };
+
     if (connected) {
       badge.style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
       badge.style.color = '#10b981';
       badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-      badge.title = 'Conectado exitosamente a la base de datos de producción';
+      badge.title = 'Hacé clic para ver el endpoint API y diagnóstico de BD';
       text.textContent = isCloud ? 'Base de Datos Nube: Conectado' : 'SQL Server 2019: Conectado';
     } else {
       badge.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
       badge.style.color = '#f59e0b';
       badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-      const shortErr = errMsg ? `: ${errMsg.substring(0, 40)}...` : '';
-      badge.title = errMsg || 'Sin conexión a la base de datos backend';
+      badge.title = errMsg || 'Hacé clic para diagnóstico de conexión';
       text.textContent = isCloud ? `Base de Datos Nube: Offline (${errMsg ? errMsg.substring(0, 25) : 'Cache'})` : 'SQL Server 2019: Offline (Cache)';
     }
   }
