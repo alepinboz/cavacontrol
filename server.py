@@ -20,7 +20,10 @@ if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.star
 def get_db():
     if IS_POSTGRES:
         import psycopg2
-        conn = psycopg2.connect(DATABASE_URL)
+        url = DATABASE_URL
+        if 'sslmode' not in url.lower():
+            url += '?sslmode=require' if '?' not in url else '&sslmode=require'
+        conn = psycopg2.connect(url)
         return conn
     else:
         import pyodbc
