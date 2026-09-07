@@ -17,6 +17,37 @@ if DATABASE_URL and (DATABASE_URL.startswith('postgres://') or DATABASE_URL.star
     if DATABASE_URL.startswith('postgres://'):
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
+def safe_float(val, default=0.0):
+    if val is None or val == '':
+        return float(default)
+    try:
+        return float(val)
+    except Exception:
+        return float(default)
+
+def safe_int(val, default=0):
+    if val is None or val == '':
+        return int(default)
+    try:
+        return int(val)
+    except Exception:
+        return int(default)
+
+def safe_str(val, max_len=None):
+    if val is None:
+        s = ''
+    else:
+        s = str(val)
+    # Sanitize invalid unicode replacement chars and null bytes
+    s = s.replace('\ufffd', 'N' if 'SUE' in s or 'SUE' in s.upper() else 'E' if 'ALMAC' in s or 'ALMAC' in s.upper() else '').replace('\x00', '')
+    try:
+        s = s.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
+    except Exception:
+        pass
+    if max_len:
+        return s[:max_len]
+    return s
+
 def get_db():
     if IS_POSTGRES:
         import psycopg2
@@ -24,6 +55,10 @@ def get_db():
         if 'sslmode' not in url.lower():
             url += '?sslmode=require' if '?' not in url else '&sslmode=require'
         conn = psycopg2.connect(url)
+        try:
+            conn.set_client_encoding('UTF8')
+        except Exception:
+            pass
         return conn
     else:
         import pyodbc
@@ -82,11 +117,20 @@ def init_postgres_tables_if_needed():
         CREATE TABLE IF NOT EXISTS Entradas (id VARCHAR(100) PRIMARY KEY, numero_compra INT NOT NULL, articulo_id VARCHAR(100) NOT NULL, cepa VARCHAR(255), proveedor_id VARCHAR(100) NOT NULL, cantidad_cajas INT NOT NULL, unidades_sumadas INT NOT NULL, precio_caja DOUBLE PRECISION NOT NULL, costo_adicional DOUBLE PRECISION NOT NULL DEFAULT 0, fecha VARCHAR(20));
         CREATE TABLE IF NOT EXISTS Salidas (id VARCHAR(100) PRIMARY KEY, fecha VARCHAR(20), cliente_id VARCHAR(100) NOT NULL, tipo_venta VARCHAR(50) NOT NULL, articulo_id VARCHAR(100) NOT NULL, membresia_id VARCHAR(100), cantidad_botellas INT NOT NULL, detalle VARCHAR(255));
         CREATE TABLE IF NOT EXISTS AuditoriaLogs (id VARCHAR(100) PRIMARY KEY, fecha_hora VARCHAR(50) NOT NULL, usuario VARCHAR(255) NOT NULL, modulo VARCHAR(100) NOT NULL, accion VARCHAR(100) NOT NULL, detalle TEXT);
+
+        ALTER TABLE Membresias ADD COLUMN IF NOT EXISTS tipo VARCHAR(100) DEFAULT 'Selección';
+        ALTER TABLE Membresias ADD COLUMN IF NOT EXISTS precio DOUBLE PRECISION DEFAULT 0;
+        ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS costo_adicional DOUBLE PRECISION DEFAULT 0;
+        ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS fecha VARCHAR(20);
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS fecha VARCHAR(20);
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS detalle VARCHAR(255);
+        ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'Admin';
+        ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS fecha_creacion VARCHAR(50);
         """
         cursor.execute(schema_sql)
         conn.commit()
         conn.close()
-        print("Tablas de PostgreSQL (Supabase/Neon) inicializadas automáticamente.")
+        print("Tablas de PostgreSQL (Supabase/Neon) inicializadas automáticamente con migraciones.")
     except Exception as e:
         print("Aviso inicializando tablas PostgreSQL:", e)
 
@@ -335,6 +379,7 @@ def get_full_state():
 @app.route('/api/db/sync', method=['POST', 'OPTIONS'])
 @enable_cors
 def sync_full_state():
+    conn = None
     try:
         data = request.json
         if not data:
@@ -353,74 +398,142 @@ def sync_full_state():
         db_execute(cursor, "DELETE FROM ArticuloProveedores;")
         db_execute(cursor, "DELETE FROM Articulos;")
         db_execute(cursor, "DELETE FROM Proveedores;")
-        db_execute(cursor, "DELETE FROM Usuarios;")
-
-        # 0. Usuarios Bulk Insert
-        usr_rows = [(str(u['id']), str(u['nombre'])[:150], str(u['email'])[:255], str(u.get('password', '123456'))[:255], str(u.get('rol', 'Usuario'))[:50], str(u.get('fechaCreacion', ''))[:50]) for u in data.get('usuarios', [])]
-        if usr_rows:
-            db_executemany(cursor, "INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?)", usr_rows)
+        
+        # Only clear/insert usuarios if provided
+        if 'usuarios' in data and data['usuarios']:
+            db_execute(cursor, "DELETE FROM Usuarios;")
+            usr_rows = [(
+                safe_str(u.get('id')),
+                safe_str(u.get('nombre'), 150),
+                safe_str(u.get('email'), 255),
+                safe_str(u.get('password', '123456'), 255),
+                safe_str(u.get('rol', 'Usuario'), 50),
+                safe_str(u.get('fechaCreacion', ''), 50)
+            ) for u in data.get('usuarios', []) if u.get('id')]
+            if usr_rows:
+                db_executemany(cursor, "INSERT INTO Usuarios (id, nombre, email, password, rol, fecha_creacion) VALUES (?, ?, ?, ?, ?, ?)", usr_rows)
 
         # 1. Proveedores Bulk Insert
-        prov_rows = [(str(p['id']), str(p['nombre'])[:255], str(p.get('telefono', ''))[:100], str(p.get('email', ''))[:255]) for p in data.get('proveedores', [])]
+        prov_rows = [(
+            safe_str(p.get('id')),
+            safe_str(p.get('nombre'), 255),
+            safe_str(p.get('telefono', ''), 100),
+            safe_str(p.get('email', ''), 255)
+        ) for p in data.get('proveedores', []) if p.get('id')]
         if prov_rows:
             db_executemany(cursor, "INSERT INTO Proveedores (id, nombre, telefono, email) VALUES (?, ?, ?, ?)", prov_rows)
 
         valid_prov_ids = {p[0] for p in prov_rows}
 
         # 2. Articulos & ArticuloProveedores Bulk Insert
-        art_rows = [(str(a['id']), str(a['bodega'])[:255], str(a['etiqueta'])[:255], str(a['cepa'])[:255], int(a.get('uxb', 6))) for a in data.get('articulos', [])]
+        art_rows = [(
+            safe_str(a.get('id')),
+            safe_str(a.get('bodega'), 255),
+            safe_str(a.get('etiqueta'), 255),
+            safe_str(a.get('cepa'), 255),
+            safe_int(a.get('uxb'), 6)
+        ) for a in data.get('articulos', []) if a.get('id')]
         if art_rows:
             db_executemany(cursor, "INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb) VALUES (?, ?, ?, ?, ?)", art_rows)
 
         art_prov_rows = []
         for a in data.get('articulos', []):
-            art_id = str(a['id'])
+            art_id = safe_str(a.get('id'))
+            if not art_id:
+                continue
             seen_pids = set()
             for pid in a.get('proveedoresIds', []):
-                pid_str = str(pid)
+                pid_str = safe_str(pid)
                 if pid_str in valid_prov_ids and pid_str not in seen_pids:
                     seen_pids.add(pid_str)
                     art_prov_rows.append((art_id, pid_str))
         if art_prov_rows:
             db_executemany(cursor, "INSERT INTO ArticuloProveedores (articulo_id, proveedor_id) VALUES (?, ?)", art_prov_rows)
 
-        # 3. Membresias & MembresiaItems Bulk Insert (con tipo y precio)
-        memb_rows = [(str(m['id']), str(m['codigo'])[:50], str(m['descripcion'])[:255], str(m.get('fechaDesde', ''))[:20], str(m.get('fechaHasta', ''))[:20], float(m.get('ganancia', 40)), str(m.get('tipo', 'Selección'))[:100], float(m.get('precio', 0))) for m in data.get('membresias', [])]
+        # 3. Membresias & MembresiaItems Bulk Insert
+        memb_rows = [(
+            safe_str(m.get('id')),
+            safe_str(m.get('codigo'), 50),
+            safe_str(m.get('descripcion'), 255),
+            safe_str(m.get('fechaDesde', ''), 20),
+            safe_str(m.get('fechaHasta', ''), 20),
+            safe_float(m.get('ganancia'), 40.0),
+            safe_str(m.get('tipo', 'Selección'), 100),
+            safe_float(m.get('precio'), 0.0)
+        ) for m in data.get('membresias', []) if m.get('id')]
         if memb_rows:
             db_executemany(cursor, "INSERT INTO Membresias (id, codigo, descripcion, fecha_desde, fecha_hasta, ganancia, tipo, precio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", memb_rows)
 
         memb_items_rows = []
         for m in data.get('membresias', []):
-            m_id = str(m['id'])
+            m_id = safe_str(m.get('id'))
+            if not m_id:
+                continue
             items = m.get('items', [])
             if not items and m.get('articuloId'):
                 items = [{"articuloId": m['articuloId'], "cantidad": m.get('cantidad', 1)}]
             seen_items = set()
             for item in items:
-                art_id_str = str(item['articuloId'])
-                if art_id_str not in seen_items:
+                art_id_str = safe_str(item.get('articuloId'))
+                if art_id_str and art_id_str not in seen_items:
                     seen_items.add(art_id_str)
-                    memb_items_rows.append((m_id, art_id_str, int(item.get('cantidad', 1))))
+                    memb_items_rows.append((m_id, art_id_str, safe_int(item.get('cantidad'), 1)))
         if memb_items_rows:
             db_executemany(cursor, "INSERT INTO MembresiaItems (membresia_id, articulo_id, cantidad) VALUES (?, ?, ?)", memb_items_rows)
 
         # 4. Clientes Bulk Insert
-        cli_rows = [(str(c['id']), str(c['nombre'])[:150], str(c['apellido'])[:150], str(c.get('telefono', ''))[:100], str(c.get('provincia', ''))[:100], str(c.get('localidad', ''))[:100], str(c.get('direccion', ''))[:255], str(c.get('membresiaId', ''))[:100]) for c in data.get('clientes', [])]
+        cli_rows = [(
+            safe_str(c.get('id')),
+            safe_str(c.get('nombre'), 150),
+            safe_str(c.get('apellido'), 150),
+            safe_str(c.get('telefono', ''), 100),
+            safe_str(c.get('provincia', ''), 100),
+            safe_str(c.get('localidad', ''), 100),
+            safe_str(c.get('direccion', ''), 255),
+            safe_str(c.get('membresiaId', ''), 100)
+        ) for c in data.get('clientes', []) if c.get('id')]
         if cli_rows:
             db_executemany(cursor, "INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
 
         # 5. Entradas Bulk Insert
-        ent_rows = [(str(e['id']), int(e['numeroCompra']), str(e['articuloId']), str(e.get('cepa', ''))[:255], str(e['proveedorId']), int(e['cantidadCajas']), int(e['unidadesSumadas']), float(e['precioCaja']), float(e.get('costoAdicionalCaja', 0)), str(e.get('fecha', ''))[:20]) for e in data.get('entradas', [])]
+        ent_rows = [(
+            safe_str(e.get('id')),
+            safe_int(e.get('numeroCompra'), 1),
+            safe_str(e.get('articuloId')),
+            safe_str(e.get('cepa', ''), 255),
+            safe_str(e.get('proveedorId')),
+            safe_int(e.get('cantidadCajas'), 1),
+            safe_int(e.get('unidadesSumadas'), 0),
+            safe_float(e.get('precioCaja'), 0.0),
+            safe_float(e.get('costoAdicionalCaja'), 0.0),
+            safe_str(e.get('fecha', ''), 20)
+        ) for e in data.get('entradas', []) if e.get('id')]
         if ent_rows:
             db_executemany(cursor, "INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
 
         # 6. Salidas Bulk Insert
-        sal_rows = [(str(s['id']), str(s.get('fecha', ''))[:20], str(s['clienteId']), str(s['tipoVenta'])[:50], str(s['articuloId']), str(s.get('membresiaId', ''))[:100] if s.get('membresiaId') else None, int(s['cantidadBotellas']), str(s.get('detalle', ''))[:255]) for s in data.get('salidas', [])]
+        sal_rows = [(
+            safe_str(s.get('id')),
+            safe_str(s.get('fecha', ''), 20),
+            safe_str(s.get('clienteId')),
+            safe_str(s.get('tipoVenta', 'Directa'), 50),
+            safe_str(s.get('articuloId')),
+            safe_str(s.get('membresiaId'), 100) if s.get('membresiaId') else None,
+            safe_int(s.get('cantidadBotellas'), 1),
+            safe_str(s.get('detalle', ''), 255)
+        ) for s in data.get('salidas', []) if s.get('id')]
         if sal_rows:
             db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
 
         # 7. AuditoriaLogs Bulk Insert
-        audit_rows = [(str(log['id']), str(log['fechaHora'])[:50], str(log['usuario'])[:255], str(log['modulo'])[:100], str(log['accion'])[:100], str(log.get('detalle', ''))) for log in data.get('auditoriaLogs', [])]
+        audit_rows = [(
+            safe_str(log.get('id')),
+            safe_str(log.get('fechaHora', ''), 50),
+            safe_str(log.get('usuario', ''), 255),
+            safe_str(log.get('modulo', ''), 100),
+            safe_str(log.get('accion', ''), 100),
+            safe_str(log.get('detalle', ''))
+        ) for log in data.get('auditoriaLogs', []) if log.get('id')]
         if audit_rows:
             db_executemany(cursor, "INSERT INTO AuditoriaLogs (id, fecha_hora, usuario, modulo, accion, detalle) VALUES (?, ?, ?, ?, ?, ?)", audit_rows)
 
@@ -432,6 +545,12 @@ def sync_full_state():
 
     except Exception as e:
         print("ERROR DURANTE SYNC BULK DB:", traceback.format_exc())
+        if conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except Exception:
+                pass
         response.status = 500
         return {"error": str(e)}
 
