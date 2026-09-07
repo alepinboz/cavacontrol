@@ -592,7 +592,48 @@
     });
   }
 
+  function getNowDateTimeLocal() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function populateFilterSelects() {
+    // 1. Proveedores en Entradas
+    const provSelect = document.getElementById('filter-entradas-proveedor');
+    if (provSelect) {
+      const currentVal = provSelect.value;
+      const options = `<option value="">Todos los Proveedores</option>` +
+        (state.proveedores || []).map(p => `<option value="${p.id}" ${String(p.id) === String(currentVal) ? 'selected' : ''}>${p.nombre}</option>`).join('');
+      provSelect.innerHTML = options;
+    }
+
+    // 2. Clientes en Salidas (ordenados A-Z)
+    const cliSelect = document.getElementById('filter-salidas-cliente');
+    if (cliSelect) {
+      const currentVal = cliSelect.value;
+      const sortedClientes = [...(state.clientes || [])].sort((a, b) => {
+        const nameA = `${a.nombre || ''} ${a.apellido || ''}`.trim();
+        const nameB = `${b.nombre || ''} ${b.apellido || ''}`.trim();
+        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+      });
+      const options = `<option value="">Todos los Clientes</option>` +
+        sortedClientes.map(c => `<option value="${c.id}" ${String(c.id) === String(currentVal) ? 'selected' : ''}>${c.nombre} ${c.apellido}</option>`).join('');
+      cliSelect.innerHTML = options;
+    }
+
+    // 3. Membresías en Salidas
+    const membSelect = document.getElementById('filter-salidas-membresia');
+    if (membSelect) {
+      const currentVal = membSelect.value;
+      const options = `<option value="">Todas las Membresías</option>` +
+        (state.membresias || []).map(m => `<option value="${m.id}" ${String(m.id) === String(currentVal) ? 'selected' : ''}>[${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion}</option>`).join('');
+      membSelect.innerHTML = options;
+    }
+  }
+
   function renderAllViews() {
+    populateFilterSelects();
     renderView(activeTabId);
   }
 
@@ -905,7 +946,13 @@
   // 6. ENTRADAS
   function renderEntradas() {
     const tbody = document.getElementById('tbody-entradas');
+    if (!tbody) return;
+
     const searchVal = (document.getElementById('search-entradas').value || '').toLowerCase();
+    const provFilter = document.getElementById('filter-entradas-proveedor') ? document.getElementById('filter-entradas-proveedor').value : '';
+    const desdeFilter = document.getElementById('filter-entradas-desde') ? document.getElementById('filter-entradas-desde').value : '';
+    const hastaFilter = document.getElementById('filter-entradas-hasta') ? document.getElementById('filter-entradas-hasta').value : '';
+    const sortBy = document.getElementById('sort-entradas-by') ? document.getElementById('sort-entradas-by').value : 'num_desc';
 
     const list = (state.entradas || []).filter(e => {
       const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
@@ -914,16 +961,36 @@
       const provName = prov ? prov.nombre.toLowerCase() : '';
       const numStr = String(e.numeroCompra);
 
-      return numStr.includes(searchVal) || artName.includes(searchVal) || provName.includes(searchVal);
+      const matchSearch = !searchVal || numStr.includes(searchVal) || artName.includes(searchVal) || provName.includes(searchVal);
+      const matchProv = !provFilter || String(e.proveedorId) === String(provFilter);
+
+      const eDateStr = (e.fecha || '').substring(0, 10);
+      const matchDesde = !desdeFilter || (eDateStr && eDateStr >= desdeFilter);
+      const matchHasta = !hastaFilter || (eDateStr && eDateStr <= hastaFilter);
+
+      return matchSearch && matchProv && matchDesde && matchHasta;
+    });
+
+    list.sort((a, b) => {
+      if (sortBy === 'num_desc') return Number(b.numeroCompra) - Number(a.numeroCompra);
+      if (sortBy === 'num_asc') return Number(a.numeroCompra) - Number(b.numeroCompra);
+      if (sortBy === 'fecha_desc') return new Date(b.fecha || 0) - new Date(a.fecha || 0);
+      if (sortBy === 'fecha_asc') return new Date(a.fecha || 0) - new Date(b.fecha || 0);
+      if (sortBy === 'monto_desc' || sortBy === 'monto_asc') {
+        const totA = Number(a.cantidadCajas) * ((Number(a.precioCaja) || 0) + (Number(a.costoAdicionalCaja) || 0));
+        const totB = Number(b.cantidadCajas) * ((Number(b.precioCaja) || 0) + (Number(b.costoAdicionalCaja) || 0));
+        return sortBy === 'monto_desc' ? totB - totA : totA - totB;
+      }
+      return Number(b.numeroCompra) - Number(a.numeroCompra);
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted">No hay compras (entradas) registradas</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted">No hay compras (entradas) registradas que coincidan con los filtros</td></tr>`;
       return;
     }
 
     let html = '';
-    list.sort((a, b) => Number(b.numeroCompra) - Number(a.numeroCompra)).forEach(e => {
+    list.forEach(e => {
       const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
       const prov = state.proveedores.find(p => String(p.id) === String(e.proveedorId));
       
@@ -1020,21 +1087,60 @@
   // 8. SALIDAS
   function renderSalidas() {
     const tbody = document.getElementById('tbody-salidas');
+    if (!tbody) return;
+
     const searchVal = (document.getElementById('search-salidas').value || '').toLowerCase();
+    const clienteFilter = document.getElementById('filter-salidas-cliente') ? document.getElementById('filter-salidas-cliente').value : '';
+    const tipoFilter = document.getElementById('filter-salidas-tipo') ? document.getElementById('filter-salidas-tipo').value : '';
+    const membresiaFilter = document.getElementById('filter-salidas-membresia') ? document.getElementById('filter-salidas-membresia').value : '';
+    const desdeFilter = document.getElementById('filter-salidas-desde') ? document.getElementById('filter-salidas-desde').value : '';
+    const hastaFilter = document.getElementById('filter-salidas-hasta') ? document.getElementById('filter-salidas-hasta').value : '';
+    const sortBy = document.getElementById('sort-salidas-by') ? document.getElementById('sort-salidas-by').value : 'fecha_desc';
 
     const list = (state.salidas || []).filter(s => {
       const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
+      const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
       const cliName = cli ? `${cli.nombre} ${cli.apellido}`.toLowerCase() : '';
-      return cliName.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
+      const artName = art ? `${art.bodega} ${art.etiqueta} ${art.cepa}`.toLowerCase() : '';
+      const detText = (s.detalle || '').toLowerCase();
+
+      const matchSearch = !searchVal || cliName.includes(searchVal) || artName.includes(searchVal) || detText.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
+      const matchCliente = !clienteFilter || String(s.clienteId) === String(clienteFilter);
+      const matchTipo = !tipoFilter || s.tipoVenta === tipoFilter;
+      const matchMembresia = !membresiaFilter || String(s.membresiaId) === String(membresiaFilter);
+
+      const sDateStr = (s.fecha || '').substring(0, 10);
+      const matchDesde = !desdeFilter || (sDateStr && sDateStr >= desdeFilter);
+      const matchHasta = !hastaFilter || (sDateStr && sDateStr <= hastaFilter);
+
+      return matchSearch && matchCliente && matchTipo && matchMembresia && matchDesde && matchHasta;
+    });
+
+    list.sort((a, b) => {
+      if (sortBy === 'fecha_desc') return new Date(b.fecha || 0) - new Date(a.fecha || 0);
+      if (sortBy === 'fecha_asc') return new Date(a.fecha || 0) - new Date(b.fecha || 0);
+      if (sortBy === 'cliente_asc') {
+        const cliA = state.clientes.find(c => String(c.id) === String(a.clienteId));
+        const cliB = state.clientes.find(c => String(c.id) === String(b.clienteId));
+        const nameA = cliA ? `${cliA.nombre} ${cliA.apellido}` : '';
+        const nameB = cliB ? `${cliB.nombre} ${cliB.apellido}` : '';
+        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+      }
+      if (sortBy === 'total_desc' || sortBy === 'total_asc') {
+        const totA = (Number(a.precioUnitario) || 0) * (Number(a.cantidadBotellas) || 0);
+        const totB = (Number(b.precioUnitario) || 0) * (Number(b.cantidadBotellas) || 0);
+        return sortBy === 'total_desc' ? totB - totA : totA - totB;
+      }
+      return new Date(b.fecha || 0) - new Date(a.fecha || 0);
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay salidas/ventas registradas</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay salidas/ventas registradas que coincidan con los filtros</td></tr>`;
       return;
     }
 
     let html = '';
-    list.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).forEach(s => {
+    list.forEach(s => {
       const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
       const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
       const isMembresia = s.tipoVenta === 'MEMBRESIA';
@@ -1051,7 +1157,7 @@
 
       html += `
         <tr>
-          <td class="text-muted">${s.fecha}</td>
+          <td class="text-muted"><strong>${s.fecha}</strong></td>
           <td><strong>${cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A'}</strong></td>
           <td><span class="badge ${badgeClass}">${isMembresia ? 'Membresía' : 'Botella'}</span></td>
           <td>${detalleDisplay}</td>
@@ -1897,8 +2003,8 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Fecha de Venta *</label>
-            <input type="date" id="sal-fecha" class="form-control" value="${todayStr}" required>
+            <label>Fecha y Hora de Venta *</label>
+            <input type="datetime-local" id="sal-fecha" class="form-control" value="${getNowDateTimeLocal()}" required>
           </div>
         </div>
 
@@ -2124,7 +2230,9 @@
     document.getElementById('form-salida').addEventListener('submit', (e) => {
       e.preventDefault();
       const clienteId = cliSelect.value;
-      const fecha = document.getElementById('sal-fecha').value;
+      const rawFecha = document.getElementById('sal-fecha').value;
+      let fecha = rawFecha ? rawFecha.replace('T', ' ') : getFormattedTimestamp();
+      if (fecha.length === 16) fecha += ':00';
       const tipoVenta = document.querySelector('input[name="tipoVenta"]:checked').value;
       const cli = state.clientes.find(c => String(c.id) === String(clienteId));
 
@@ -2726,7 +2834,11 @@
 
   // Debounced search input filters (150ms delay)
   let searchDebounceTimeout = null;
-  ['search-membresias', 'search-proveedores', 'search-clientes', 'search-articulos', 'search-entradas', 'search-stock', 'search-salidas', 'search-auditoria', 'filter-auditoria-modulo'].forEach(id => {
+  [
+    'search-membresias', 'search-proveedores', 'search-clientes', 'search-articulos', 'search-entradas', 'search-stock', 'search-salidas', 'search-auditoria', 'filter-auditoria-modulo',
+    'filter-entradas-proveedor', 'filter-entradas-desde', 'filter-entradas-hasta', 'sort-entradas-by',
+    'filter-salidas-cliente', 'filter-salidas-tipo', 'filter-salidas-membresia', 'filter-salidas-desde', 'filter-salidas-hasta', 'sort-salidas-by'
+  ].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('input', () => {
@@ -2740,6 +2852,32 @@
       });
     }
   });
+
+  const btnClearEntradas = document.getElementById('btn-clear-filter-entradas');
+  if (btnClearEntradas) {
+    btnClearEntradas.addEventListener('click', () => {
+      document.getElementById('search-entradas').value = '';
+      const p = document.getElementById('filter-entradas-proveedor'); if (p) p.value = '';
+      const d = document.getElementById('filter-entradas-desde'); if (d) d.value = '';
+      const h = document.getElementById('filter-entradas-hasta'); if (h) h.value = '';
+      const s = document.getElementById('sort-entradas-by'); if (s) s.value = 'num_desc';
+      renderEntradas();
+    });
+  }
+
+  const btnClearSalidas = document.getElementById('btn-clear-filter-salidas');
+  if (btnClearSalidas) {
+    btnClearSalidas.addEventListener('click', () => {
+      document.getElementById('search-salidas').value = '';
+      const c = document.getElementById('filter-salidas-cliente'); if (c) c.value = '';
+      const t = document.getElementById('filter-salidas-tipo'); if (t) t.value = '';
+      const m = document.getElementById('filter-salidas-membresia'); if (m) m.value = '';
+      const d = document.getElementById('filter-salidas-desde'); if (d) d.value = '';
+      const h = document.getElementById('filter-salidas-hasta'); if (h) h.value = '';
+      const s = document.getElementById('sort-salidas-by'); if (s) s.value = 'fecha_desc';
+      renderSalidas();
+    });
+  }
 
   window.closeModal = closeModal;
   window.performLogin = performLogin;

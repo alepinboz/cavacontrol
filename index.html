@@ -401,7 +401,7 @@
 
         <!-- ENTRADAS VIEW -->
         <section id="view-entradas" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
               <input type="text" id="search-entradas" placeholder="Buscar por N° compra, artículo o proveedor...">
@@ -415,6 +415,37 @@
                 <i data-lucide="plus"></i> Nueva Compra (Entrada)
               </button>
             </div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="filter-group">
+              <label><i data-lucide="truck"></i> Proveedor:</label>
+              <select id="filter-entradas-proveedor">
+                <option value="">Todos los Proveedores</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="calendar"></i> Desde:</label>
+              <input type="date" id="filter-entradas-desde">
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="calendar"></i> Hasta:</label>
+              <input type="date" id="filter-entradas-hasta">
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="arrow-up-down"></i> Ordenar por:</label>
+              <select id="sort-entradas-by">
+                <option value="num_desc">N° Compra (Más reciente)</option>
+                <option value="num_asc">N° Compra (Más antiguo)</option>
+                <option value="fecha_desc">Fecha (Más reciente)</option>
+                <option value="fecha_asc">Fecha (Más antigua)</option>
+                <option value="monto_desc">Total Compra (Mayor a menor)</option>
+                <option value="monto_asc">Total Compra (Menor a mayor)</option>
+              </select>
+            </div>
+            <button class="btn btn-ghost btn-sm text-muted" id="btn-clear-filter-entradas" title="Limpiar Filtros" style="padding:0.3rem 0.6rem; font-size:0.8rem;">
+              <i data-lucide="x-circle"></i> Limpiar
+            </button>
           </div>
 
           <div class="card shadow-sm">
@@ -465,8 +496,8 @@
                     <th>Bodega</th>
                     <th>Etiqueta</th>
                     <th>Cepa</th>
+                    <th>Botellas Físicas</th>
                     <th>UxB</th>
-                    <th>Stock Unidades</th>
                     <th>Cajas Equiv.</th>
                     <th>Último Precio Caja</th>
                     <th>Costo Adic. Caja</th>
@@ -485,13 +516,57 @@
 
         <!-- SALIDAS VIEW -->
         <section id="view-salidas" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
-              <input type="text" id="search-salidas" placeholder="Buscar por cliente o tipo...">
+              <input type="text" id="search-salidas" placeholder="Buscar por cliente, vino o tipo...">
             </div>
             <button class="btn btn-primary" id="btn-add-salida">
               <i data-lucide="plus"></i> Nueva Venta / Entrega
+            </button>
+          </div>
+
+          <div class="filter-bar">
+            <div class="filter-group">
+              <label><i data-lucide="user"></i> Cliente:</label>
+              <select id="filter-salidas-cliente">
+                <option value="">Todos los Clientes</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="filter"></i> Tipo Venta:</label>
+              <select id="filter-salidas-tipo">
+                <option value="">Todos los Tipos</option>
+                <option value="BOTELLA">Venta por Botella</option>
+                <option value="MEMBRESIA">Venta por Membresía</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="award"></i> Membresía:</label>
+              <select id="filter-salidas-membresia">
+                <option value="">Todas las Membresías</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="calendar"></i> Desde:</label>
+              <input type="date" id="filter-salidas-desde">
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="calendar"></i> Hasta:</label>
+              <input type="date" id="filter-salidas-hasta">
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="arrow-up-down"></i> Ordenar por:</label>
+              <select id="sort-salidas-by">
+                <option value="fecha_desc">Fecha y Hora (Más reciente)</option>
+                <option value="fecha_asc">Fecha y Hora (Más antigua)</option>
+                <option value="cliente_asc">Cliente (A - Z)</option>
+                <option value="total_desc">Total Venta (Mayor a menor)</option>
+                <option value="total_asc">Total Venta (Menor a mayor)</option>
+              </select>
+            </div>
+            <button class="btn btn-ghost btn-sm text-muted" id="btn-clear-filter-salidas" title="Limpiar Filtros" style="padding:0.3rem 0.6rem; font-size:0.8rem;">
+              <i data-lucide="x-circle"></i> Limpiar
             </button>
           </div>
 
