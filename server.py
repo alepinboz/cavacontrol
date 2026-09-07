@@ -430,17 +430,23 @@ def sync_full_state():
         response.status = 500
         return {"error": str(e)}
 
-# --- STATIC FILE ROUTES ---
-
 @app.route('/<filename:path>', method=['GET', 'OPTIONS'])
 @enable_cors
 def serve_static(filename):
-    return static_file(filename, root='.')
+    res = static_file(filename, root='.')
+    res.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    res.headers['Pragma'] = 'no-cache'
+    res.headers['Expires'] = '0'
+    return res
 
 @app.route('/', method=['GET', 'OPTIONS'])
 @enable_cors
 def serve_index():
-    return static_file('index.html', root='.')
+    res = static_file('index.html', root='.')
+    res.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    res.headers['Pragma'] = 'no-cache'
+    res.headers['Expires'] = '0'
+    return res
 
 if __name__ == '__main__':
     print(f"Iniciando servidor de conexión CavaControl en http://{HOST}:{PORT} ...")

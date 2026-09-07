@@ -115,7 +115,19 @@
     try {
       const storedUser = sessionStorage.getItem(SESSION_USER_KEY) || localStorage.getItem(SESSION_USER_KEY);
       if (storedUser) {
-        currentUser = JSON.parse(storedUser);
+        const userObj = JSON.parse(storedUser);
+        // Validar si el usuario aún existe en la base de datos cargada
+        if (state.usuarios && state.usuarios.length > 0 && isSqlServerConnected) {
+          const exists = state.usuarios.some(u => (u.email || '').toLowerCase() === (userObj.email || '').toLowerCase());
+          if (!exists) {
+            currentUser = null;
+            sessionStorage.removeItem(SESSION_USER_KEY);
+            localStorage.removeItem(SESSION_USER_KEY);
+            showLoginOverlay();
+            return;
+          }
+        }
+        currentUser = userObj;
         hideLoginOverlay();
         updateUserBadge();
       } else {
