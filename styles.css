@@ -13,10 +13,11 @@
   --border-color: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.15);
 
-  --wine-primary: #800e2e;
-  --wine-hover: #9c123b;
-  --wine-light: rgba(128, 14, 46, 0.15);
-  --wine-glow: rgba(128, 14, 46, 0.35);
+  --borra-brand: #48293d;
+  --wine-primary: #48293d;
+  --wine-hover: #5d354f;
+  --wine-light: rgba(72, 41, 61, 0.25);
+  --wine-glow: rgba(72, 41, 61, 0.45);
 
   --gold-accent: #d4af37;
   --gold-light: rgba(212, 175, 55, 0.15);

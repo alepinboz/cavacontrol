@@ -637,130 +637,178 @@
     renderView(activeTabId);
   }
 
-  // 1. DASHBOARD
+  // 1. DASHBOARD REDESIGNED FOR BORRA
   function renderDashboard() {
     let totalStockVal = 0;
-    let totalBotellas = 0;
+    let totalBotellasStock = 0;
     (state.articulos || []).forEach(art => {
       const m = getArticuloMetrics(art.id);
       totalStockVal += m.stock * m.ultimoCostoUnitario;
-      totalBotellas += m.stock;
+      totalBotellasStock += m.stock;
     });
 
-    document.getElementById('dash-val-stock').textContent = formatCurrency(totalStockVal);
-    document.getElementById('dash-sub-stock').textContent = `${totalBotellas} botellas en cava`;
+    const elStockVal = document.getElementById('dash-val-stock');
+    if (elStockVal) elStockVal.textContent = formatCurrency(totalStockVal);
+    const elStockSub = document.getElementById('dash-sub-stock');
+    if (elStockSub) elStockSub.textContent = `${totalBotellasStock} botellas en cava`;
 
-    // Importe Vendido Total (Ventas por botella + Membresías)
-    let totalImporteVendido = 0;
-    const processedMembresiaGroups = new Set();
+    // Sales Breakdown Metrics
+    let cantMembElite = 0;
+    let subtotalMembElite = 0;
+    let botellasMembElite = 0;
+
+    let cantMembSeleccion = 0;
+    let subtotalMembSeleccion = 0;
+    let botellasMembSeleccion = 0;
+
+    let cantVentasBotella = 0;
+    let subtotalVentasBotella = 0;
+    let botellasVentasBotella = 0;
+
+    const processedMembresiaSales = new Map();
 
     (state.salidas || []).forEach(s => {
-      const cant = Number(s.cantidadBotellas) || 0;
+      const cantBot = Number(s.cantidadBotellas) || 0;
       const pu = Number(s.precioUnitario) || 0;
 
       if (s.tipoVenta === 'BOTELLA') {
-        totalImporteVendido += (pu * cant);
+        cantVentasBotella++;
+        botellasVentasBotella += cantBot;
+        subtotalVentasBotella += (pu * cantBot);
       } else if (s.tipoVenta === 'MEMBRESIA') {
-        if (pu > 0) {
-          totalImporteVendido += (pu * cant);
-        } else if (s.membresiaId) {
-          // Si no tiene precio unitario grabado, sumar la membresía 1 sola vez por entrega
-          const groupKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
-          if (!processedMembresiaGroups.has(groupKey)) {
-            processedMembresiaGroups.add(groupKey);
-            const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
-            if (memb) {
-              totalImporteVendido += Number(memb.precio) || 0;
-            }
+        const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
+        let tipo = 'Selección';
+        if (memb && memb.tipo) {
+          tipo = memb.tipo;
+        } else if (s.detalle && s.detalle.toUpperCase().includes('ELITE')) {
+          tipo = 'Élite';
+        }
+
+        const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+
+        if (!processedMembresiaSales.has(transKey)) {
+          let precioMemb = 0;
+          if (pu > 0) {
+            const siblings = (state.salidas || []).filter(item => {
+              const itemKey = item.id ? item.id.split('-').slice(0, 3).join('-') : `${item.fecha}_${item.clienteId}_${item.membresiaId}`;
+              return itemKey === transKey;
+            });
+            precioMemb = siblings.reduce((sum, item) => sum + (Number(item.precioUnitario) || 0) * (Number(item.cantidadBotellas) || 0), 0);
+            const totalBot = siblings.reduce((sum, item) => sum + (Number(item.cantidadBotellas) || 0), 0);
+            processedMembresiaSales.set(transKey, { tipo, precio: precioMemb, botellas: totalBot });
+          } else {
+            precioMemb = memb ? (Number(memb.precio) || 0) : 0;
+            const calc = memb ? getMembresiaCalculations(memb) : { totalBotellas: cantBot };
+            processedMembresiaSales.set(transKey, { tipo, precio: precioMemb, botellas: calc.totalBotellas || cantBot });
           }
         }
       }
     });
 
-    const elValVendido = document.getElementById('dash-val-vendido');
-    if (elValVendido) elValVendido.textContent = formatCurrency(totalImporteVendido);
-    const elSubVendido = document.getElementById('dash-sub-vendido');
-    if (elSubVendido) elSubVendido.textContent = `${(state.salidas || []).length} ventas/entregas registradas`;
+    processedMembresiaSales.forEach((sale) => {
+      const isElite = sale.tipo && (sale.tipo.toLowerCase().includes('élite') || sale.tipo.toLowerCase().includes('elite'));
+      if (isElite) {
+        cantMembElite++;
+        subtotalMembElite += sale.precio;
+        botellasMembElite += sale.botellas;
+      } else {
+        cantMembSeleccion++;
+        subtotalMembSeleccion += sale.precio;
+        botellasMembSeleccion += sale.botellas;
+      }
+    });
 
-    const membVigentes = (state.membresias || []).filter(m => isMembresiaVigente(m)).length;
-    document.getElementById('dash-memb-vigentes').textContent = membVigentes;
-    document.getElementById('dash-sub-memb').textContent = `${(state.clientes || []).length} clientes registrados`;
+    const totalBotellasVendidas = botellasMembElite + botellasMembSeleccion + botellasVentasBotella;
+    const totalDineroVendido = subtotalMembElite + subtotalMembSeleccion + subtotalVentasBotella;
+    const totalTransaccionesVentas = cantMembElite + cantMembSeleccion + cantVentasBotella;
 
-    const totalInvertido = (state.entradas || []).reduce((s, e) => s + (Number(e.cantidadCajas) * (Number(e.precioCaja) + (Number(e.costoAdicionalCaja) || 0))), 0);
-    document.getElementById('dash-total-entradas').textContent = (state.entradas || []).length;
-    document.getElementById('dash-sub-entradas').textContent = `${formatCurrency(totalInvertido)} invertidos`;
+    // Update Stat Cards
+    const elEliteCount = document.getElementById('dash-elite-count');
+    if (elEliteCount) elEliteCount.textContent = cantMembElite;
+    const elEliteSubtotal = document.getElementById('dash-elite-subtotal');
+    if (elEliteSubtotal) elEliteSubtotal.textContent = formatCurrency(subtotalMembElite);
 
-    const totalEntregasBotellas = (state.salidas || []).reduce((s, sal) => s + (Number(sal.cantidadBotellas) || 0), 0);
-    document.getElementById('dash-total-salidas').textContent = (state.salidas || []).length;
-    document.getElementById('dash-sub-salidas').textContent = `${totalEntregasBotellas} botellas entregadas`;
+    const elSeleccionCount = document.getElementById('dash-seleccion-count');
+    if (elSeleccionCount) elSeleccionCount.textContent = cantMembSeleccion;
+    const elSeleccionSubtotal = document.getElementById('dash-seleccion-subtotal');
+    if (elSeleccionSubtotal) elSeleccionSubtotal.textContent = formatCurrency(subtotalMembSeleccion);
 
-    const movementsTbody = document.getElementById('tbody-dash-movements');
-    movementsTbody.innerHTML = '';
+    const elBotellaCount = document.getElementById('dash-botella-count');
+    if (elBotellaCount) elBotellaCount.textContent = `${botellasVentasBotella} bot.`;
+    const elBotellaSubtotal = document.getElementById('dash-botella-subtotal');
+    if (elBotellaSubtotal) elBotellaSubtotal.textContent = formatCurrency(subtotalVentasBotella);
 
-    const allMovements = [
-      ...(state.entradas || []).map(e => {
-        const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
-        return {
-          tipo: 'ENTRADA',
-          detalle: art ? `${art.bodega} - ${art.etiqueta}` : 'Vino N/A',
-          cantidad: `+${e.unidadesSumadas} bot. (${e.cantidadCajas} cj.)`,
-          fecha: e.fecha || '--'
-        };
-      }),
-      ...(state.salidas || []).map(s => {
-        const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
-        return {
-          tipo: 'SALIDA',
-          detalle: art ? `${art.bodega} - ${art.etiqueta}` : 'Vino N/A',
-          cantidad: `-${s.cantidadBotellas} bot.`,
-          fecha: s.fecha || '--'
-        };
-      })
-    ].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 5);
+    const elTotalDinero = document.getElementById('dash-total-dinero');
+    if (elTotalDinero) elTotalDinero.textContent = formatCurrency(totalDineroVendido);
+    const elTotalBotellas = document.getElementById('dash-total-botellas');
+    if (elTotalBotellas) elTotalBotellas.textContent = `${totalBotellasVendidas} botellas vendidas en total`;
 
-    if (allMovements.length === 0) {
-      movementsTbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Sin movimientos registrados</td></tr>`;
-    } else {
-      let html = '';
-      allMovements.forEach(m => {
-        const isEntrada = m.tipo === 'ENTRADA';
-        const badgeClass = isEntrada ? 'badge-success' : 'badge-danger';
-        html += `
-          <tr>
-            <td><span class="badge ${badgeClass}">${m.tipo}</span></td>
-            <td><strong>${m.detalle}</strong></td>
-            <td>${m.cantidad}</td>
-            <td class="text-muted">${m.fecha}</td>
-          </tr>
-        `;
-      });
-      movementsTbody.innerHTML = html;
+    // Render Category Breakdown Table
+    const tableBreakdownBody = document.getElementById('tbody-dash-sales-breakdown');
+    if (tableBreakdownBody) {
+      const pctElite = totalDineroVendido > 0 ? ((subtotalMembElite / totalDineroVendido) * 100).toFixed(1) : '0.0';
+      const pctSeleccion = totalDineroVendido > 0 ? ((subtotalMembSeleccion / totalDineroVendido) * 100).toFixed(1) : '0.0';
+      const pctBotella = totalDineroVendido > 0 ? ((subtotalVentasBotella / totalDineroVendido) * 100).toFixed(1) : '0.0';
+
+      tableBreakdownBody.innerHTML = `
+        <tr>
+          <td><strong><span class="badge badge-warning">👑 Membresías Élite</span></strong></td>
+          <td>${cantMembElite} ventas</td>
+          <td><strong>${botellasMembElite}</strong> bot.</td>
+          <td><strong class="text-gold" style="font-size:1.05rem">${formatCurrency(subtotalMembElite)}</strong></td>
+          <td><span class="badge badge-info">${pctElite}%</span></td>
+        </tr>
+        <tr>
+          <td><strong><span class="badge badge-info">🍷 Membresías Selección</span></strong></td>
+          <td>${cantMembSeleccion} ventas</td>
+          <td><strong>${botellasMembSeleccion}</strong> bot.</td>
+          <td><strong class="text-gold" style="font-size:1.05rem">${formatCurrency(subtotalMembSeleccion)}</strong></td>
+          <td><span class="badge badge-info">${pctSeleccion}%</span></td>
+        </tr>
+        <tr>
+          <td><strong><span class="badge badge-success">🍾 Ventas por Botella</span></strong></td>
+          <td>${cantVentasBotella} ventas</td>
+          <td><strong>${botellasVentasBotella}</strong> bot.</td>
+          <td><strong class="text-emerald" style="font-size:1.05rem">${formatCurrency(subtotalVentasBotella)}</strong></td>
+          <td><span class="badge badge-info">${pctBotella}%</span></td>
+        </tr>
+        <tr style="background:rgba(212,175,55,0.08); font-weight:bold; border-top:2px solid var(--gold-accent)">
+          <td><strong style="color:var(--gold-accent); font-size:1rem">📊 TOTAL GENERAL</strong></td>
+          <td><strong>${totalTransaccionesVentas} ventas</strong></td>
+          <td><strong style="font-size:1.05rem">${totalBotellasVendidas} bot.</strong></td>
+          <td><strong style="color:var(--purple); font-size:1.2rem">${formatCurrency(totalDineroVendido)}</strong></td>
+          <td><span class="badge badge-warning">100%</span></td>
+        </tr>
+      `;
     }
 
+    // Render Stock Alerts
     const alertsTbody = document.getElementById('tbody-dash-alerts');
-    alertsTbody.innerHTML = '';
-    const lowStockArts = (state.articulos || []).map(a => ({
-      ...a,
-      stock: getArticuloMetrics(a.id).stock
-    })).filter(a => a.stock <= 6);
+    if (alertsTbody) {
+      alertsTbody.innerHTML = '';
+      const lowStockArts = (state.articulos || []).map(a => ({
+        ...a,
+        stock: getArticuloMetrics(a.id).stock
+      })).filter(a => a.stock <= 6);
 
-    if (lowStockArts.length === 0) {
-      alertsTbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No hay productos con stock crítico</td></tr>`;
-    } else {
-      let html = '';
-      lowStockArts.forEach(a => {
-        const badgeClass = a.stock === 0 ? 'badge-danger' : 'badge-warning';
-        const estadoText = a.stock === 0 ? 'Sin Stock' : 'Stock Bajo';
-        html += `
-          <tr>
-            <td><strong>${a.bodega}</strong> ${a.etiqueta}</td>
-            <td>${a.cepa}</td>
-            <td><strong>${a.stock}</strong> bot.</td>
-            <td><span class="badge ${badgeClass}">${estadoText}</span></td>
-          </tr>
-        `;
-      });
-      alertsTbody.innerHTML = html;
+      if (lowStockArts.length === 0) {
+        alertsTbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No hay productos con stock crítico</td></tr>`;
+      } else {
+        let html = '';
+        lowStockArts.forEach(a => {
+          const badgeClass = a.stock === 0 ? 'badge-danger' : 'badge-warning';
+          const estadoText = a.stock === 0 ? 'Sin Stock' : 'Stock Bajo';
+          html += `
+            <tr>
+              <td><strong>${a.bodega}</strong> ${a.etiqueta}</td>
+              <td>${a.cepa}</td>
+              <td><strong>${a.stock}</strong> bot.</td>
+              <td><span class="badge ${badgeClass}">${estadoText}</span></td>
+            </tr>
+          `;
+        });
+        alertsTbody.innerHTML = html;
+      }
     }
   }
 

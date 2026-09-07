@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CavaControl - Gestión de Emprendimiento de Vinos</title>
+  <title>BORRA - CavaControl | Vinos de Selección</title>
   <!-- Google Fonts: Inter & Playfair Display -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,22 +16,21 @@
 
   <!-- LOGIN SCREEN OVERLAY -->
   <div id="login-overlay" class="login-overlay active">
-    <div class="login-card shadow-lg">
-      <div class="login-header">
-        <div class="login-brand-icon">
-          <i data-lucide="wine"></i>
+    <div class="login-card shadow-lg" style="text-align:center;">
+      <div class="login-header" style="margin-bottom:1.5rem;">
+        <div class="login-brand-logo" style="margin-bottom:0.75rem;">
+          <img src="logo_borra.png" alt="BORRA Vinos de Selección" style="max-width: 240px; height: auto;">
         </div>
-        <h2>CavaControl</h2>
-        <p class="text-muted">Acceso al Sistema de Gestión de Vinos</p>
+        <p class="text-muted" style="font-size:0.9rem; margin-top:0.25rem;">CavaControl | Sistema de Gestión de Vinos</p>
       </div>
 
       <!-- FORM INICIAR SESIÓN -->
       <form id="form-login" class="login-form" onsubmit="if(window.performLogin){window.performLogin();} return false;">
-        <div class="form-group">
+        <div class="form-group" style="text-align:left;">
           <label><i data-lucide="mail"></i> Correo Electrónico</label>
           <input type="email" id="login-email" class="form-control" required placeholder="usuario@empresa.com" value="">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="text-align:left;">
           <label><i data-lucide="key"></i> Contraseña</label>
           <input type="password" id="login-password" class="form-control" required placeholder="••••••••" value="">
         </div>
@@ -46,14 +45,9 @@
   <div class="app-container">
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-icon">
-          <i data-lucide="wine"></i>
-        </div>
-        <div class="brand-text">
-          <h1>CavaControl</h1>
-          <span class="brand-subtitle">Gestión de Vinos</span>
-        </div>
+      <div class="brand" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding-bottom:1.25rem; border-bottom:1px solid var(--border-color); margin-bottom:1.25rem;">
+        <img src="logo_borra_white.png" alt="BORRA Vinos de Selección" style="max-width: 170px; height: auto; margin-bottom: 0.4rem;">
+        <span class="brand-subtitle" style="font-size:0.7rem; color:var(--gold-accent); letter-spacing:1px; text-transform:uppercase;">CavaControl &bull; Gestión</span>
       </div>
 
       <nav class="nav-menu">
@@ -118,7 +112,7 @@
           </button>
           <div class="header-title">
             <h2 id="page-title">Dashboard</h2>
-            <p id="page-subtitle" class="text-muted">Resumen general del emprendimiento de vinos</p>
+            <p id="page-subtitle" class="text-muted">Resumen general y métricas de BORRA Vinos de Selección</p>
           </div>
         </div>
         <div class="header-actions">
@@ -137,61 +131,61 @@
       <!-- View Containers -->
       <div class="content-body">
         
-        <!-- DASHBOARD VIEW -->
+        <!-- DASHBOARD VIEW REDESIGNED FOR BORRA -->
         <section id="view-dashboard" class="view-section active">
           <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-icon bg-wine">
-                <i data-lucide="dollar-sign"></i>
-              </div>
-              <div class="stat-details">
-                <span class="stat-label">Valorización de Stock</span>
-                <h3 class="stat-value" id="dash-val-stock">$0</h3>
-                <span class="stat-subtext" id="dash-sub-stock">0 botellas en cava</span>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-icon bg-emerald">
-                <i data-lucide="trending-up"></i>
-              </div>
-              <div class="stat-details">
-                <span class="stat-label">Importe Vendido</span>
-                <h3 class="stat-value" id="dash-val-vendido" style="color:var(--emerald)">$0</h3>
-                <span class="stat-subtext" id="dash-sub-vendido">0 ventas registradas</span>
-              </div>
-            </div>
-
             <div class="stat-card">
               <div class="stat-icon bg-gold">
                 <i data-lucide="award"></i>
               </div>
               <div class="stat-details">
-                <span class="stat-label">Membresías Vigentes</span>
-                <h3 class="stat-value" id="dash-memb-vigentes">0</h3>
-                <span class="stat-subtext" id="dash-sub-memb">0 clientes asociados</span>
+                <span class="stat-label">Membresías Élite</span>
+                <h3 class="stat-value" id="dash-elite-subtotal" style="color:var(--gold-accent)">$0</h3>
+                <span class="stat-subtext" id="dash-elite-subtext"><strong id="dash-elite-count">0</strong> ventas</span>
               </div>
             </div>
 
             <div class="stat-card">
               <div class="stat-icon bg-wine">
+                <i data-lucide="award"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Membresías Selección</span>
+                <h3 class="stat-value" id="dash-seleccion-subtotal">$0</h3>
+                <span class="stat-subtext" id="dash-seleccion-subtext"><strong id="dash-seleccion-count">0</strong> ventas</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon bg-emerald">
                 <i data-lucide="shopping-bag"></i>
               </div>
               <div class="stat-details">
-                <span class="stat-label">Compras Realizadas</span>
-                <h3 class="stat-value" id="dash-total-entradas">0</h3>
-                <span class="stat-subtext" id="dash-sub-entradas">$0 invertidos</span>
+                <span class="stat-label">Ventas por Botella</span>
+                <h3 class="stat-value" id="dash-botella-subtotal" style="color:var(--emerald)">$0</h3>
+                <span class="stat-subtext" id="dash-botella-subtext"><strong id="dash-botella-count">0 bot.</strong> vendidas</span>
               </div>
             </div>
 
             <div class="stat-card">
               <div class="stat-icon bg-purple">
-                <i data-lucide="send"></i>
+                <i data-lucide="trending-up"></i>
               </div>
               <div class="stat-details">
-                <span class="stat-label">Entregas Realizadas</span>
-                <h3 class="stat-value" id="dash-total-salidas">0</h3>
-                <span class="stat-subtext" id="dash-sub-salidas">botellas entregadas</span>
+                <span class="stat-label">TOTAL FACTURADO</span>
+                <h3 class="stat-value" id="dash-total-dinero" style="color:var(--purple)">$0</h3>
+                <span class="stat-subtext" id="dash-total-botellas">0 botellas vendidas en total</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon bg-wine">
+                <i data-lucide="boxes"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Valorización Stock</span>
+                <h3 class="stat-value" id="dash-val-stock">$0</h3>
+                <span class="stat-subtext" id="dash-sub-stock">0 botellas en cava</span>
               </div>
             </div>
           </div>
@@ -199,21 +193,22 @@
           <div class="dashboard-grid">
             <div class="card shadow-sm">
               <div class="card-header">
-                <h3><i data-lucide="clock"></i> Últimos Movimientos de Stock</h3>
+                <h3><i data-lucide="pie-chart"></i> Resumen de Ventas por Tipo (Membresías y Botellas)</h3>
               </div>
               <div class="card-body p-0">
                 <div class="table-responsive">
-                  <table class="table" id="table-dash-movements">
+                  <table class="table" id="table-dash-sales-breakdown">
                     <thead>
                       <tr>
-                        <th>Tipo</th>
-                        <th>Detalle / Vino</th>
-                        <th>Cantidad</th>
-                        <th>Fecha</th>
+                        <th>Tipo / Categoría</th>
+                        <th>Ventas / Entregas</th>
+                        <th>Botellas Entregadas</th>
+                        <th>Subtotal Facturado ($)</th>
+                        <th>Participación</th>
                       </tr>
                     </thead>
-                    <tbody id="tbody-dash-movements">
-                      <tr><td colspan="4" class="text-center text-muted">Sin movimientos registrados</td></tr>
+                    <tbody id="tbody-dash-sales-breakdown">
+                      <tr><td colspan="5" class="text-center text-muted">Cargando desglose de ventas...</td></tr>
                     </tbody>
                   </table>
                 </div>
