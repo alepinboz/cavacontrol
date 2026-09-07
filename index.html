@@ -112,9 +112,14 @@
     <main class="main-content">
       <!-- Top Header -->
       <header class="top-header">
-        <div class="header-title">
-          <h2 id="page-title">Dashboard</h2>
-          <p id="page-subtitle" class="text-muted">Resumen general del emprendimiento de vinos</p>
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <button id="btn-toggle-sidebar" class="btn btn-ghost btn-sm btn-icon" title="Ocultar / Mostrar Menú">
+            <i data-lucide="menu"></i>
+          </button>
+          <div class="header-title">
+            <h2 id="page-title">Dashboard</h2>
+            <p id="page-subtitle" class="text-muted">Resumen general del emprendimiento de vinos</p>
+          </div>
         </div>
         <div class="header-actions">
           <span class="current-date-badge" id="sql-status-badge" style="margin-right: 0.5rem; background-color: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
@@ -147,6 +152,17 @@
             </div>
 
             <div class="stat-card">
+              <div class="stat-icon bg-emerald">
+                <i data-lucide="trending-up"></i>
+              </div>
+              <div class="stat-details">
+                <span class="stat-label">Importe Vendido</span>
+                <h3 class="stat-value" id="dash-val-vendido" style="color:var(--emerald)">$0</h3>
+                <span class="stat-subtext" id="dash-sub-vendido">0 ventas registradas</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
               <div class="stat-icon bg-gold">
                 <i data-lucide="award"></i>
               </div>
@@ -158,7 +174,7 @@
             </div>
 
             <div class="stat-card">
-              <div class="stat-icon bg-emerald">
+              <div class="stat-icon bg-wine">
                 <i data-lucide="shopping-bag"></i>
               </div>
               <div class="stat-details">
@@ -489,6 +505,8 @@
                     <th>Tipo de Venta</th>
                     <th>Detalle / Artículo</th>
                     <th>Cantidad Botellas</th>
+                    <th>Precio Unit.</th>
+                    <th>Total Venta</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>

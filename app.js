@@ -609,6 +609,38 @@
     document.getElementById('dash-val-stock').textContent = formatCurrency(totalStockVal);
     document.getElementById('dash-sub-stock').textContent = `${totalBotellas} botellas en cava`;
 
+    // Importe Vendido Total (Ventas por botella + Membresías)
+    let totalImporteVendido = 0;
+    const processedMembresiaGroups = new Set();
+
+    (state.salidas || []).forEach(s => {
+      const cant = Number(s.cantidadBotellas) || 0;
+      const pu = Number(s.precioUnitario) || 0;
+
+      if (s.tipoVenta === 'BOTELLA') {
+        totalImporteVendido += (pu * cant);
+      } else if (s.tipoVenta === 'MEMBRESIA') {
+        if (pu > 0) {
+          totalImporteVendido += (pu * cant);
+        } else if (s.membresiaId) {
+          // Si no tiene precio unitario grabado, sumar la membresía 1 sola vez por entrega
+          const groupKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+          if (!processedMembresiaGroups.has(groupKey)) {
+            processedMembresiaGroups.add(groupKey);
+            const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
+            if (memb) {
+              totalImporteVendido += Number(memb.precio) || 0;
+            }
+          }
+        }
+      }
+    });
+
+    const elValVendido = document.getElementById('dash-val-vendido');
+    if (elValVendido) elValVendido.textContent = formatCurrency(totalImporteVendido);
+    const elSubVendido = document.getElementById('dash-sub-vendido');
+    if (elSubVendido) elSubVendido.textContent = `${(state.salidas || []).length} ventas/entregas registradas`;
+
     const membVigentes = (state.membresias || []).filter(m => isMembresiaVigente(m)).length;
     document.getElementById('dash-memb-vigentes').textContent = membVigentes;
     document.getElementById('dash-sub-memb').textContent = `${(state.clientes || []).length} clientes registrados`;
@@ -1842,7 +1874,13 @@
       return;
     }
 
-    const cliOptions = state.clientes.map(c => `
+    const sortedClientes = [...(state.clientes || [])].sort((a, b) => {
+      const nameA = `${a.nombre || ''} ${a.apellido || ''}`.trim();
+      const nameB = `${b.nombre || ''} ${b.apellido || ''}`.trim();
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
+
+    const cliOptions = sortedClientes.map(c => `
       <option value="${c.id}">${c.nombre} ${c.apellido}</option>
     `).join('');
 
@@ -2151,6 +2189,7 @@
           }
         }
 
+        const unitPricePerBottle = calc.totalBotellas > 0 ? (calc.precio / calc.totalBotellas) : 0;
         const transactionGroupId = Date.now().toString();
         calc.items.forEach((item, idx) => {
           state.salidas.push({
@@ -2161,6 +2200,7 @@
             articuloId: item.articuloId,
             membresiaId: memb.id,
             cantidadBotellas: item.cantidad,
+            precioUnitario: unitPricePerBottle,
             detalle: `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion}`
           });
         });
@@ -2703,6 +2743,22 @@
 
   window.closeModal = closeModal;
   window.performLogin = performLogin;
+
+  // --- SIDEBAR TOGGLE ---
+  const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+  if (btnToggleSidebar) {
+    if (localStorage.getItem('cavacontrol_sidebar_collapsed') === 'true') {
+      const container = document.querySelector('.app-container');
+      if (container) container.classList.add('sidebar-collapsed');
+    }
+    btnToggleSidebar.addEventListener('click', () => {
+      const container = document.querySelector('.app-container');
+      if (container) {
+        const isCollapsed = container.classList.toggle('sidebar-collapsed');
+        localStorage.setItem('cavacontrol_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+      }
+    });
+  }
 
   // Initialize
   loadState();
