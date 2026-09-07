@@ -127,27 +127,39 @@ def auth_login():
 
         conn = get_db()
         cursor = conn.cursor()
-        db_execute(cursor, "SELECT id, nombre, email, password, rol FROM Usuarios WHERE LOWER(TRIM(email)) = ?", (email,))
-        row = cursor.fetchone()
+        db_execute(cursor, "SELECT * FROM Usuarios")
+        rows = cursor.fetchall()
+        col_names = [desc[0].lower() for desc in cursor.description] if cursor.description else []
         conn.close()
 
-        if row and str(row[3]).strip() == password:
-            return {
-                "success": True,
-                "user": {
-                    "id": str(row[0]),
-                    "nombre": str(row[1]),
-                    "email": str(row[2]),
-                    "rol": str(row[4])
+        email_idx = col_names.index('email') if 'email' in col_names else 2
+        pass_idx = col_names.index('password') if 'password' in col_names else 3
+        id_idx = col_names.index('id') if 'id' in col_names else 0
+        nombre_idx = col_names.index('nombre') if 'nombre' in col_names else 1
+        rol_idx = col_names.index('rol') if 'rol' in col_names else 4
+
+        matched_user = None
+        for r in rows:
+            u_email = str(r[email_idx] or '').strip().lower()
+            u_pass = str(r[pass_idx] or '').strip()
+            if u_email == email and u_pass == password:
+                matched_user = {
+                    "id": str(r[id_idx]),
+                    "nombre": str(r[nombre_idx]),
+                    "email": str(r[email_idx]),
+                    "rol": str(r[rol_idx]) if rol_idx < len(r) else 'Admin'
                 }
-            }
+                break
+
+        if matched_user:
+            return {"success": True, "user": matched_user}
         else:
             response.status = 401
             return {"success": False, "message": "Credenciales inválidas. Verifique su email y contraseña."}
     except Exception as e:
         print("ERROR login:", traceback.format_exc())
         response.status = 500
-        return {"success": False, "message": str(e)}
+        return {"success": False, "message": f"Error en BD: {str(e)}"}
 
 @app.route('/api/auth/register', method=['POST', 'OPTIONS'])
 @enable_cors
@@ -201,8 +213,25 @@ def get_full_state():
         cursor = conn.cursor()
 
         # Usuarios
-        db_execute(cursor, "SELECT id, nombre, email, password, rol, fecha_creacion FROM Usuarios")
-        usuarios = [{"id": str(r[0]), "nombre": str(r[1]), "email": str(r[2]), "password": str(r[3]), "rol": str(r[4]), "fechaCreacion": str(r[5] or '')} for r in cursor.fetchall()]
+        db_execute(cursor, "SELECT * FROM Usuarios")
+        usr_rows = cursor.fetchall()
+        usr_cols = [desc[0].lower() for desc in cursor.description] if cursor.description else []
+        
+        u_id = usr_cols.index('id') if 'id' in usr_cols else 0
+        u_nom = usr_cols.index('nombre') if 'nombre' in usr_cols else 1
+        u_em = usr_cols.index('email') if 'email' in usr_cols else 2
+        u_pw = usr_cols.index('password') if 'password' in usr_cols else 3
+        u_rl = usr_cols.index('rol') if 'rol' in usr_cols else 4
+        u_fc = usr_cols.index('fecha_creacion') if 'fecha_creacion' in usr_cols else 5
+
+        usuarios = [{
+            "id": str(r[u_id]),
+            "nombre": str(r[u_nom]),
+            "email": str(r[u_em]),
+            "password": str(r[u_pw]),
+            "rol": str(r[u_rl]) if u_rl < len(r) else 'Admin',
+            "fechaCreacion": str(r[u_fc] if u_fc < len(r) else '')
+        } for r in usr_rows]
 
         # Proveedores
         db_execute(cursor, "SELECT id, nombre, telefono, email FROM Proveedores")
