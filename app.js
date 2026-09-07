@@ -2385,20 +2385,62 @@
         let count = 0;
 
         rows.forEach(r => {
-          const bodega = r.bodega || (r._raw ? r._raw[0] : '');
-          const etiqueta = r.etiqueta || (r._raw ? r._raw[1] : '');
-          const provNombre = r.nombreproveedor || r.proveedor || (r._raw ? r._raw[2] : '');
-          const cajas = parseInt(r.cantidadcajas || r.cajas || (r._raw ? r._raw[3] : 1), 10) || 1;
-          const precioCaja = parseFloat(r.preciocaja || r.precio || (r._raw ? r._raw[4] : 0)) || 0;
-          const costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || (r._raw ? r._raw[5] : 0)) || 0;
-          const fecha = r.fecha || (r._raw ? r._raw[6] : '') || new Date().toISOString().split('T')[0];
+          const raw = r._raw || [];
+          let bodega = r.bodega || '';
+          let etiqueta = r.etiqueta || '';
+          let cepaCsv = r.cepa || '';
+          let provNombre = r.nombreproveedor || r.proveedor || '';
+          let cajas = 1;
+          let precioCaja = 0;
+          let costoAdicCaja = 0;
+          let fecha = r.fecha || '';
 
-          const art = state.articulos.find(a => 
-            a.bodega.toLowerCase().trim().includes(bodega.toLowerCase().trim()) &&
-            a.etiqueta.toLowerCase().trim().includes(etiqueta.toLowerCase().trim())
+          if (raw.length >= 8) {
+            // New 8-column format: bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha
+            bodega = bodega || raw[0] || '';
+            etiqueta = etiqueta || raw[1] || '';
+            cepaCsv = cepaCsv || raw[2] || '';
+            provNombre = provNombre || raw[3] || '';
+            cajas = parseInt(r.cantidadcajas || r.cajas || raw[4] || '1', 10) || 1;
+            precioCaja = parseFloat(r.preciocaja || r.precio || raw[5] || '0') || 0;
+            costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[6] || '0') || 0;
+            fecha = fecha || raw[7] || new Date().toISOString().split('T')[0];
+          } else if (raw.length === 7) {
+            // Legacy 7-column format: bodega;etiqueta;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha
+            bodega = bodega || raw[0] || '';
+            etiqueta = etiqueta || raw[1] || '';
+            provNombre = provNombre || raw[2] || '';
+            cajas = parseInt(r.cantidadcajas || r.cajas || raw[3] || '1', 10) || 1;
+            precioCaja = parseFloat(r.preciocaja || r.precio || raw[4] || '0') || 0;
+            costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[5] || '0') || 0;
+            fecha = fecha || raw[6] || new Date().toISOString().split('T')[0];
+          } else {
+            // Header / named fallback
+            bodega = bodega || raw[0] || '';
+            etiqueta = etiqueta || raw[1] || '';
+            provNombre = provNombre || raw[3] || raw[2] || '';
+            cajas = parseInt(r.cantidadcajas || r.cajas || raw[4] || raw[3] || '1', 10) || 1;
+            precioCaja = parseFloat(r.preciocaja || r.precio || raw[5] || raw[4] || '0') || 0;
+            costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[6] || raw[5] || '0') || 0;
+            fecha = fecha || raw[7] || raw[6] || new Date().toISOString().split('T')[0];
+          }
+
+          if (!bodega || !etiqueta) return;
+
+          let art = state.articulos.find(a => 
+            a.bodega.toLowerCase().trim() === bodega.toLowerCase().trim() &&
+            a.etiqueta.toLowerCase().trim() === etiqueta.toLowerCase().trim() &&
+            (cepaCsv ? a.cepa.toLowerCase().trim() === cepaCsv.toLowerCase().trim() : true)
           );
 
-          let prov = state.proveedores.find(p => p.nombre.toLowerCase().includes(provNombre.toLowerCase()));
+          if (!art) {
+            art = state.articulos.find(a => 
+              a.bodega.toLowerCase().trim().includes(bodega.toLowerCase().trim()) &&
+              a.etiqueta.toLowerCase().trim().includes(etiqueta.toLowerCase().trim())
+            );
+          }
+
+          let prov = state.proveedores.find(p => p.nombre.toLowerCase().trim() === provNombre.toLowerCase().trim() || p.nombre.toLowerCase().includes(provNombre.toLowerCase().trim()));
           if (!prov && provNombre) {
             prov = getOrCreateSupplierByName(provNombre);
           }
@@ -2411,7 +2453,7 @@
               id: generateUniqueId('ent'),
               numeroCompra: lastNum + 1,
               articuloId: art.id,
-              cepa: art.cepa,
+              cepa: cepaCsv || art.cepa,
               proveedorId: prov.id,
               cantidadCajas: cajas,
               unidadesSumadas: cajas * uxb,
