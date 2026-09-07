@@ -26,7 +26,7 @@
       </div>
 
       <!-- FORM INICIAR SESIÓN -->
-      <form id="form-login" class="login-form" onsubmit="return false;">
+      <form id="form-login" class="login-form" onsubmit="if(window.performLogin){window.performLogin();} return false;">
         <div class="form-group">
           <label><i data-lucide="mail"></i> Correo Electrónico</label>
           <input type="email" id="login-email" class="form-control" required placeholder="usuario@empresa.com" value="">
@@ -35,7 +35,7 @@
           <label><i data-lucide="key"></i> Contraseña</label>
           <input type="password" id="login-password" class="form-control" required placeholder="••••••••" value="">
         </div>
-        <button type="button" id="btn-login-submit" class="btn btn-primary full-width btn-lg">
+        <button type="button" id="btn-login-submit" class="btn btn-primary full-width btn-lg" onclick="if(window.performLogin){window.performLogin();}">
           <i data-lucide="log-in"></i> Ingresar al Sistema
         </button>
       </form>
@@ -559,6 +559,6 @@
   <!-- TOAST NOTIFICATION -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=5.1_login_fix"></script>
+  <script src="app.js?v=5.2_instant_login"></script>
 </body>
 </html>

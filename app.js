@@ -2524,6 +2524,7 @@
   });
 
   window.closeModal = closeModal;
+  window.performLogin = performLogin;
 
   // Initialize
   loadState();
