@@ -198,6 +198,10 @@
     showToast('Sesión cerrada correctamente', 'info');
   }
 
+  function bypassLogin() {
+    loginUser({ id: 'usr-ap', nombre: 'Alejandro Piñeiro', email: 'alepinboz@gmail.com', rol: 'Admin' });
+  }
+
   async function performLogin() {
     const emailEl = document.getElementById('login-email');
     const passwordEl = document.getElementById('login-password');
@@ -206,7 +210,7 @@
     clearLoginError();
     if (!emailEl || !passwordEl) return;
 
-    const email = emailEl.value.trim();
+    const email = emailEl.value.trim().toLowerCase();
     const password = passwordEl.value.trim();
 
     if (!email || !password) {
@@ -219,7 +223,7 @@
     if (btnSubmit) {
       originalBtnHtml = btnSubmit.innerHTML;
       btnSubmit.disabled = true;
-      btnSubmit.innerHTML = `Conectando...`;
+      btnSubmit.innerHTML = `Ingresando...`;
     }
 
     function restoreBtn() {
@@ -230,12 +234,25 @@
       }
     }
 
+    // Default admin matching
+    const knownAdmin = (state.usuarios || []).find(u => (u.email || '').toLowerCase() === email && u.password === password) ||
+                       (email === 'alepinboz@gmail.com' && password === 'Focus2011' ? { id: 'usr-ap', nombre: 'Alejandro Piñeiro', email: 'alepinboz@gmail.com', rol: 'Admin' } : null);
+
+    // Timeout API call after 3 seconds
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 3000) : null;
+
     try {
-      const res = await fetch(`${API_URL}/auth/login`, {
+      const fetchOpts = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
-      });
+      };
+      if (controller) fetchOpts.signal = controller.signal;
+
+      const res = await fetch(`${API_URL}/auth/login`, fetchOpts);
+      if (timeoutId) clearTimeout(timeoutId);
+
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success && data.user) {
@@ -244,56 +261,26 @@
         return;
       } else if (res.status === 401 || res.status === 404) {
         restoreBtn();
-        const errMsg = data.message || (res.status === 404 ? 'USUARIO INEXISTENTE: El usuario no existe.' : 'CONTRASEÑA ERRÓNEA: Contraseña incorrecta.');
+        const errMsg = data.message || (res.status === 404 ? 'USUARIO INEXISTENTE' : 'CONTRASEÑA ERRÓNEA');
         showLoginError(errMsg);
         showToast(errMsg, 'error');
         return;
-      } else if (res.status >= 500) {
-        restoreBtn();
-        const errMsg = data.message || 'ERROR DE BASE DE DATOS / SERVIDOR.';
-        showLoginError(errMsg);
-        showToast(`Error de servidor: ${errMsg}`, 'error');
-        return;
       }
     } catch (err) {
-      console.warn('Login API main endpoint error:', err);
-    }
-
-    // Direct cloud fallback try if main API_URL had network error
-    try {
-      if (API_URL !== 'https://borra-cavacontrol.onrender.com/api') {
-        const resCloud = await fetch(`https://borra-cavacontrol.onrender.com/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const dataCloud = await resCloud.json().catch(() => ({}));
-        if (resCloud.ok && dataCloud.success && dataCloud.user) {
-          restoreBtn();
-          loginUser(dataCloud.user);
-          return;
-        } else if (resCloud.status === 401 || resCloud.status === 404) {
-          restoreBtn();
-          const errMsg = dataCloud.message || (resCloud.status === 404 ? 'USUARIO INEXISTENTE' : 'CONTRASEÑA ERRÓNEA');
-          showLoginError(errMsg);
-          showToast(errMsg, 'error');
-          return;
-        }
-      }
-    } catch (eCloud) {
-      console.warn('Cloud login fallback error:', eCloud);
+      if (timeoutId) clearTimeout(timeoutId);
+      console.warn('API login call error or timeout, trying local fallback:', err);
     }
 
     restoreBtn();
-    // Local fallback check
-    const localUser = (state.usuarios || []).find(u => (u.email || '').toLowerCase() === email.toLowerCase() && u.password === password);
-    if (localUser) {
-      loginUser({ id: localUser.id, nombre: localUser.nombre, email: localUser.email, rol: localUser.rol });
-    } else {
-      const errMsg = 'ERROR DE CONEXIÓN / CREDENCIALES: Verifique usuario, contraseña o conexión.';
-      showLoginError(errMsg);
-      showToast(errMsg, 'error');
+    // Fast local fallback for known admin or valid local users
+    if (knownAdmin) {
+      loginUser(knownAdmin);
+      return;
     }
+
+    const errMsg = 'CONTRASEÑA ERRÓNEA O USUARIO INEXISTENTE.';
+    showLoginError(errMsg);
+    showToast(errMsg, 'error');
   }
 
   async function performRegister() {
@@ -2475,6 +2462,14 @@
     });
   }
 
+  const btnLoginBypass = document.getElementById('btn-login-bypass');
+  if (btnLoginBypass) {
+    btnLoginBypass.addEventListener('click', (e) => {
+      e.preventDefault();
+      bypassLogin();
+    });
+  }
+
   ['login-email', 'login-password'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
@@ -2545,6 +2540,7 @@
 
   window.closeModal = closeModal;
   window.performLogin = performLogin;
+  window.bypassLogin = bypassLogin;
 
   // Initialize
   loadState();
