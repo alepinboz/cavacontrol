@@ -722,17 +722,27 @@
     const totalDineroVendido = subtotalMembElite + subtotalMembSeleccion + subtotalVentasBotella;
     const totalTransaccionesVentas = cantMembElite + cantMembSeleccion + cantVentasBotella;
 
-    // Update Stat Cards
+    const pctElite = totalDineroVendido > 0 ? ((subtotalMembElite / totalDineroVendido) * 100).toFixed(1) : '0.0';
+    const pctSeleccion = totalDineroVendido > 0 ? ((subtotalMembSeleccion / totalDineroVendido) * 100).toFixed(1) : '0.0';
+    const pctBotella = totalDineroVendido > 0 ? ((subtotalVentasBotella / totalDineroVendido) * 100).toFixed(1) : '0.0';
+
+    // Update Stat Cards & Badges (% Share)
+    const elPctElite = document.getElementById('dash-pct-elite');
+    if (elPctElite) elPctElite.textContent = `${pctElite}%`;
     const elEliteCount = document.getElementById('dash-elite-count');
     if (elEliteCount) elEliteCount.textContent = cantMembElite;
     const elEliteSubtotal = document.getElementById('dash-elite-subtotal');
     if (elEliteSubtotal) elEliteSubtotal.textContent = formatCurrency(subtotalMembElite);
 
+    const elPctSeleccion = document.getElementById('dash-pct-seleccion');
+    if (elPctSeleccion) elPctSeleccion.textContent = `${pctSeleccion}%`;
     const elSeleccionCount = document.getElementById('dash-seleccion-count');
     if (elSeleccionCount) elSeleccionCount.textContent = cantMembSeleccion;
     const elSeleccionSubtotal = document.getElementById('dash-seleccion-subtotal');
     if (elSeleccionSubtotal) elSeleccionSubtotal.textContent = formatCurrency(subtotalMembSeleccion);
 
+    const elPctBotella = document.getElementById('dash-pct-botella');
+    if (elPctBotella) elPctBotella.textContent = `${pctBotella}%`;
     const elBotellaCount = document.getElementById('dash-botella-count');
     if (elBotellaCount) elBotellaCount.textContent = `${botellasVentasBotella} bot.`;
     const elBotellaSubtotal = document.getElementById('dash-botella-subtotal');
@@ -743,43 +753,93 @@
     const elTotalBotellas = document.getElementById('dash-total-botellas');
     if (elTotalBotellas) elTotalBotellas.textContent = `${totalBotellasVendidas} botellas vendidas en total`;
 
-    // Render Category Breakdown Table
-    const tableBreakdownBody = document.getElementById('tbody-dash-sales-breakdown');
-    if (tableBreakdownBody) {
-      const pctElite = totalDineroVendido > 0 ? ((subtotalMembElite / totalDineroVendido) * 100).toFixed(1) : '0.0';
-      const pctSeleccion = totalDineroVendido > 0 ? ((subtotalMembSeleccion / totalDineroVendido) * 100).toFixed(1) : '0.0';
-      const pctBotella = totalDineroVendido > 0 ? ((subtotalVentasBotella / totalDineroVendido) * 100).toFixed(1) : '0.0';
+    // Render Client Membership Deliveries Table (Resumen de Membresías por Cliente)
+    const tableClientMembBody = document.getElementById('tbody-dash-client-memberships');
+    if (tableClientMembBody) {
+      const clientMembDeliveries = new Map();
 
-      tableBreakdownBody.innerHTML = `
-        <tr>
-          <td><strong><span class="badge badge-warning">👑 Membresías Élite</span></strong></td>
-          <td>${cantMembElite} ventas</td>
-          <td><strong>${botellasMembElite}</strong> bot.</td>
-          <td><strong class="text-gold" style="font-size:1.05rem">${formatCurrency(subtotalMembElite)}</strong></td>
-          <td><span class="badge badge-info">${pctElite}%</span></td>
-        </tr>
-        <tr>
-          <td><strong><span class="badge badge-info">🍷 Membresías Selección</span></strong></td>
-          <td>${cantMembSeleccion} ventas</td>
-          <td><strong>${botellasMembSeleccion}</strong> bot.</td>
-          <td><strong class="text-gold" style="font-size:1.05rem">${formatCurrency(subtotalMembSeleccion)}</strong></td>
-          <td><span class="badge badge-info">${pctSeleccion}%</span></td>
-        </tr>
-        <tr>
-          <td><strong><span class="badge badge-success">🍾 Ventas por Botella</span></strong></td>
-          <td>${cantVentasBotella} ventas</td>
-          <td><strong>${botellasVentasBotella}</strong> bot.</td>
-          <td><strong class="text-emerald" style="font-size:1.05rem">${formatCurrency(subtotalVentasBotella)}</strong></td>
-          <td><span class="badge badge-info">${pctBotella}%</span></td>
-        </tr>
-        <tr style="background:rgba(212,175,55,0.08); font-weight:bold; border-top:2px solid var(--gold-accent)">
-          <td><strong style="color:var(--gold-accent); font-size:1rem">📊 TOTAL GENERAL</strong></td>
-          <td><strong>${totalTransaccionesVentas} ventas</strong></td>
-          <td><strong style="font-size:1.05rem">${totalBotellasVendidas} bot.</strong></td>
-          <td><strong style="color:var(--purple); font-size:1.2rem">${formatCurrency(totalDineroVendido)}</strong></td>
-          <td><span class="badge badge-warning">100%</span></td>
-        </tr>
-      `;
+      (state.salidas || []).forEach(s => {
+        if (s.tipoVenta === 'MEMBRESIA') {
+          const cli = (state.clientes || []).find(c => String(c.id) === String(s.clienteId));
+          const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
+          const cliName = cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A';
+          const membTipo = memb ? (memb.tipo || 'Selección') : (s.detalle && s.detalle.toUpperCase().includes('ELITE') ? 'Élite' : 'Selección');
+          const membCodigo = memb ? memb.codigo : '';
+          const membDesc = memb ? memb.descripcion : (s.detalle || 'Membresía');
+          const membPrecio = memb ? (Number(memb.precio) || 0) : 0;
+          const membId = s.membresiaId || 'custom';
+          const clienteId = s.clienteId;
+
+          const groupKey = `${membId}_${clienteId}`;
+          const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+
+          if (!clientMembDeliveries.has(groupKey)) {
+            clientMembDeliveries.set(groupKey, {
+              membId,
+              clienteId,
+              cliName,
+              membTipo,
+              membCodigo,
+              membDesc,
+              transKeys: new Set(),
+              ventasCount: 0,
+              botellasCount: 0,
+              subtotalDinero: 0,
+              ultimaFecha: s.fecha || ''
+            });
+          }
+
+          const group = clientMembDeliveries.get(groupKey);
+          const cantBot = Number(s.cantidadBotellas) || 0;
+          const pu = Number(s.precioUnitario) || 0;
+
+          group.botellasCount += cantBot;
+
+          if (!group.transKeys.has(transKey)) {
+            group.transKeys.add(transKey);
+            group.ventasCount++;
+            if (pu > 0) {
+              const siblings = (state.salidas || []).filter(item => {
+                const itemKey = item.id ? item.id.split('-').slice(0, 3).join('-') : `${item.fecha}_${item.clienteId}_${item.membresiaId}`;
+                return itemKey === transKey;
+              });
+              const deliveryTotal = siblings.reduce((sum, item) => sum + (Number(item.precioUnitario) || 0) * (Number(item.cantidadBotellas) || 0), 0);
+              group.subtotalDinero += deliveryTotal;
+            } else {
+              group.subtotalDinero += membPrecio;
+            }
+          }
+
+          if (s.fecha && (!group.ultimaFecha || s.fecha > group.ultimaFecha)) {
+            group.ultimaFecha = s.fecha;
+          }
+        }
+      });
+
+      const listGrouped = Array.from(clientMembDeliveries.values());
+
+      if (listGrouped.length === 0) {
+        tableClientMembBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No se han registrado entregas de membresías a clientes aún</td></tr>`;
+      } else {
+        let html = '';
+        listGrouped.sort((a, b) => new Date(b.ultimaFecha || 0) - new Date(a.ultimaFecha || 0)).forEach(g => {
+          const isElite = g.membTipo && (g.membTipo.toLowerCase().includes('élite') || g.membTipo.toLowerCase().includes('elite'));
+          const badgeClass = isElite ? 'badge-warning' : 'badge-info';
+          const icon = isElite ? '👑' : '🍷';
+
+          html += `
+            <tr>
+              <td><span class="badge ${badgeClass}">${icon} ${g.membTipo} ${g.membCodigo ? `[${g.membCodigo}]` : ''}</span></td>
+              <td><strong>${g.cliName}</strong></td>
+              <td><span class="badge badge-info">${g.ventasCount} ${g.ventasCount === 1 ? 'venta' : 'ventas'}</span></td>
+              <td><strong>${g.botellasCount}</strong> bot.</td>
+              <td><strong class="text-gold" style="font-size:1.05rem">${formatCurrency(g.subtotalDinero)}</strong></td>
+              <td><small class="text-muted">${g.ultimaFecha || '--'}</small></td>
+            </tr>
+          `;
+        });
+        tableClientMembBody.innerHTML = html;
+      }
     }
 
     // Render Stock Alerts

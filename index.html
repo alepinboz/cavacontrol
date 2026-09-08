@@ -138,8 +138,11 @@
               <div class="stat-icon bg-gold">
                 <i data-lucide="award"></i>
               </div>
-              <div class="stat-details">
-                <span class="stat-label">Membresías Élite</span>
+              <div class="stat-details" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                  <span class="stat-label">Membresías Élite</span>
+                  <span id="dash-pct-elite" class="badge badge-warning" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Participación sobre facturación total">0%</span>
+                </div>
                 <h3 class="stat-value" id="dash-elite-subtotal" style="color:var(--gold-accent)">$0</h3>
                 <span class="stat-subtext" id="dash-elite-subtext"><strong id="dash-elite-count">0</strong> ventas</span>
               </div>
@@ -149,8 +152,11 @@
               <div class="stat-icon bg-wine">
                 <i data-lucide="award"></i>
               </div>
-              <div class="stat-details">
-                <span class="stat-label">Membresías Selección</span>
+              <div class="stat-details" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                  <span class="stat-label">Membresías Selección</span>
+                  <span id="dash-pct-seleccion" class="badge badge-info" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Participación sobre facturación total">0%</span>
+                </div>
                 <h3 class="stat-value" id="dash-seleccion-subtotal">$0</h3>
                 <span class="stat-subtext" id="dash-seleccion-subtext"><strong id="dash-seleccion-count">0</strong> ventas</span>
               </div>
@@ -160,8 +166,11 @@
               <div class="stat-icon bg-emerald">
                 <i data-lucide="shopping-bag"></i>
               </div>
-              <div class="stat-details">
-                <span class="stat-label">Ventas por Botella</span>
+              <div class="stat-details" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                  <span class="stat-label">Ventas por Botella</span>
+                  <span id="dash-pct-botella" class="badge badge-success" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Participación sobre facturación total">0%</span>
+                </div>
                 <h3 class="stat-value" id="dash-botella-subtotal" style="color:var(--emerald)">$0</h3>
                 <span class="stat-subtext" id="dash-botella-subtext"><strong id="dash-botella-count">0 bot.</strong> vendidas</span>
               </div>
@@ -171,8 +180,11 @@
               <div class="stat-icon bg-purple">
                 <i data-lucide="trending-up"></i>
               </div>
-              <div class="stat-details">
-                <span class="stat-label">TOTAL FACTURADO</span>
+              <div class="stat-details" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                  <span class="stat-label">TOTAL FACTURADO</span>
+                  <span class="badge badge-warning" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;">100%</span>
+                </div>
                 <h3 class="stat-value" id="dash-total-dinero" style="color:var(--purple)">$0</h3>
                 <span class="stat-subtext" id="dash-total-botellas">0 botellas vendidas en total</span>
               </div>
@@ -182,7 +194,7 @@
               <div class="stat-icon bg-wine">
                 <i data-lucide="boxes"></i>
               </div>
-              <div class="stat-details">
+              <div class="stat-details" style="flex:1;">
                 <span class="stat-label">Valorización Stock</span>
                 <h3 class="stat-value" id="dash-val-stock">$0</h3>
                 <span class="stat-subtext" id="dash-sub-stock">0 botellas en cava</span>
@@ -193,22 +205,23 @@
           <div class="dashboard-grid">
             <div class="card shadow-sm">
               <div class="card-header">
-                <h3><i data-lucide="pie-chart"></i> Resumen de Ventas por Tipo (Membresías y Botellas)</h3>
+                <h3><i data-lucide="users"></i> Entregas de Membresías por Cliente</h3>
               </div>
               <div class="card-body p-0">
                 <div class="table-responsive">
-                  <table class="table" id="table-dash-sales-breakdown">
+                  <table class="table" id="table-dash-client-memberships">
                     <thead>
                       <tr>
-                        <th>Tipo / Categoría</th>
+                        <th>Membresía / Tipo</th>
+                        <th>Cliente</th>
                         <th>Ventas / Entregas</th>
                         <th>Botellas Entregadas</th>
-                        <th>Subtotal Facturado ($)</th>
-                        <th>Participación</th>
+                        <th>Subtotal ($)</th>
+                        <th>Última Entrega</th>
                       </tr>
                     </thead>
-                    <tbody id="tbody-dash-sales-breakdown">
-                      <tr><td colspan="5" class="text-center text-muted">Cargando desglose de ventas...</td></tr>
+                    <tbody id="tbody-dash-client-memberships">
+                      <tr><td colspan="6" class="text-center text-muted">Cargando entregas de membresías por cliente...</td></tr>
                     </tbody>
                   </table>
                 </div>
