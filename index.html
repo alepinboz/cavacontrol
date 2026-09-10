@@ -191,6 +191,20 @@
             </div>
 
             <div class="stat-card">
+              <div class="stat-icon bg-emerald">
+                <i data-lucide="dollar-sign"></i>
+              </div>
+              <div class="stat-details" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                  <span class="stat-label">GANANCIA NOMINAL</span>
+                  <span id="dash-pct-ganancia" class="badge badge-success" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Margen nominal sobre ventas">0%</span>
+                </div>
+                <h3 class="stat-value" id="dash-ganancia-total" style="color:var(--emerald)">$0</h3>
+                <span class="stat-subtext" id="dash-ganancia-subtext">Costo lote PEPS descontado</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
               <div class="stat-icon bg-wine">
                 <i data-lucide="boxes"></i>
               </div>
@@ -596,6 +610,7 @@
                     <th>Cantidad Botellas</th>
                     <th>Precio Unit.</th>
                     <th>Total Venta</th>
+                    <th>Ganancia Nominal (PEPS)</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>

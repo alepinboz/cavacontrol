@@ -85,7 +85,10 @@ CREATE TABLE IF NOT EXISTS Salidas (
     detalle VARCHAR(255),
     precio_unitario DOUBLE PRECISION NOT NULL DEFAULT 0,
     precio_venta_publico DOUBLE PRECISION NOT NULL DEFAULT 0,
-    precio_venta_club DOUBLE PRECISION NOT NULL DEFAULT 0
+    precio_venta_club DOUBLE PRECISION NOT NULL DEFAULT 0,
+    costo_total_fifo DOUBLE PRECISION NOT NULL DEFAULT 0,
+    ganancia_nominal DOUBLE PRECISION NOT NULL DEFAULT 0,
+    lotes_detalle TEXT
 );
 
 CREATE TABLE IF NOT EXISTS AuditoriaLogs (

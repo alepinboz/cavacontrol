@@ -328,6 +328,40 @@
 
   let lastDbErrorMessage = '';
 
+  function backfillFifoSalidasHistorical() {
+    if (!state.salidas || state.salidas.length === 0) return false;
+
+    const sortedSalidas = [...state.salidas].sort((a, b) => {
+      const dA = a.fecha ? new Date(a.fecha.replace(' ', 'T')).getTime() : 0;
+      const dB = b.fecha ? new Date(b.fecha.replace(' ', 'T')).getTime() : 0;
+      return dA - dB;
+    });
+
+    let modified = false;
+
+    sortedSalidas.forEach(s => {
+      const needsBackfill = s.gananciaNominal === undefined ||
+                            s.gananciaNominal === null ||
+                            s.costoTotalFifo === undefined ||
+                            s.costoTotalFifo === null ||
+                            !s.lotesDetalle ||
+                            (Array.isArray(s.lotesDetalle) && s.lotesDetalle.length === 0) ||
+                            s.lotesDetalle === '[]' || s.lotesDetalle === '';
+
+      if (needsBackfill) {
+        const pu = Number(s.precioUnitario) || 0;
+        const cant = Number(s.cantidadBotellas) || 0;
+        const fifo = calculateFifoConsumption(s.articuloId, cant, pu, s.id);
+        s.costoTotalFifo = fifo.costoTotalFifo;
+        s.gananciaNominal = fifo.gananciaNominal;
+        s.lotesDetalle = fifo.lotesDetalle;
+        modified = true;
+      }
+    });
+
+    return modified;
+  }
+
   async function loadState() {
     try {
       const res = await fetch(`${API_URL}/db?t=${Date.now()}`);
@@ -338,10 +372,14 @@
           if (!Array.isArray(state.usuarios)) state.usuarios = [];
           if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
           normalizeMembresias(state.membresias);
+          const hadBackfill = backfillFifoSalidasHistorical();
           isSqlServerConnected = true;
           lastDbErrorMessage = '';
           updateSqlBadge(true);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          if (hadBackfill) {
+            saveState();
+          }
           renderAllViews();
           checkSession();
           return;
@@ -364,6 +402,9 @@
         if (!Array.isArray(state.usuarios)) state.usuarios = [];
         if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
         normalizeMembresias(state.membresias);
+        if (backfillFifoSalidasHistorical()) {
+          saveState();
+        }
       }
     } catch (e) {
       console.error('Error cargando state local:', e);
@@ -469,9 +510,109 @@
     return (state.entradas || []).filter(e => String(e.proveedorId) === String(proveedorId)).length;
   }
 
+  function getArticuloFifoBatches(articuloId, excludeSalidaId = null) {
+    const articulo = (state.articulos || []).find(a => String(a.id) === String(articuloId));
+    const uxb = articulo ? (Number(articulo.uxb) || 6) : 6;
+
+    const entradas = [...(state.entradas || [])]
+      .filter(e => String(e.articuloId) === String(articuloId))
+      .sort((a, b) => (Number(a.numeroCompra) || 0) - (Number(b.numeroCompra) || 0));
+
+    const batches = entradas.map(e => {
+      const uComp = Number(e.unidadesSumadas) || ((Number(e.cantidadCajas) || 0) * uxb);
+      const pCaja = Number(e.precioCaja) || 0;
+      const cAdic = Number(e.costoAdicionalCaja) || 0;
+      const costoUnitario = (pCaja + cAdic) / uxb;
+
+      return {
+        id: e.id,
+        numeroCompra: Number(e.numeroCompra) || 1,
+        fecha: e.fecha || '',
+        costoUnitarioBotella: costoUnitario,
+        compradas: uComp,
+        disponible: uComp
+      };
+    });
+
+    const salidas = [...(state.salidas || [])]
+      .filter(s => String(s.articuloId) === String(articuloId) && String(s.id) !== String(excludeSalidaId))
+      .sort((a, b) => {
+        const dA = a.fecha ? new Date(a.fecha.replace(' ', 'T')).getTime() : 0;
+        const dB = b.fecha ? new Date(b.fecha.replace(' ', 'T')).getTime() : 0;
+        return dA - dB;
+      });
+
+    salidas.forEach(s => {
+      let cantPedida = Number(s.cantidadBotellas) || 0;
+      for (const batch of batches) {
+        if (cantPedida <= 0) break;
+        if (batch.disponible > 0) {
+          const deduct = Math.min(batch.disponible, cantPedida);
+          batch.disponible -= deduct;
+          cantPedida -= deduct;
+        }
+      }
+    });
+
+    return batches;
+  }
+
+  function calculateFifoConsumption(articuloId, cantidadRequerida, precioUnitarioVenta, excludeSalidaId = null) {
+    const articulo = (state.articulos || []).find(a => String(a.id) === String(articuloId));
+    const batches = getArticuloFifoBatches(articuloId, excludeSalidaId);
+
+    let restante = Math.max(0, Number(cantidadRequerida) || 0);
+    let costoTotalFifo = 0;
+    const lotesDetalle = [];
+
+    for (const batch of batches) {
+      if (restante <= 0) break;
+      if (batch.disponible > 0) {
+        const cantTomada = Math.min(batch.disponible, restante);
+        const costoSubtotal = cantTomada * batch.costoUnitarioBotella;
+        costoTotalFifo += costoSubtotal;
+        restante -= cantTomada;
+
+        lotesDetalle.push({
+          numeroCompra: batch.numeroCompra,
+          cantidad: cantTomada,
+          costoUnitario: batch.costoUnitarioBotella,
+          fecha: batch.fecha
+        });
+      }
+    }
+
+    if (restante > 0) {
+      const lastEntrada = [...(state.entradas || [])]
+        .filter(e => String(e.articuloId) === String(articuloId))
+        .sort((a, b) => (Number(b.numeroCompra) || 0) - (Number(a.numeroCompra) || 0))[0];
+      const uxb = articulo ? (Number(articulo.uxb) || 6) : 6;
+      const fallbackCost = lastEntrada
+        ? (Number(lastEntrada.precioCaja || 0) + Number(lastEntrada.costoAdicionalCaja || 0)) / uxb
+        : 0;
+
+      costoTotalFifo += (restante * fallbackCost);
+      lotesDetalle.push({
+        numeroCompra: lastEntrada ? Number(lastEntrada.numeroCompra) : 0,
+        cantidad: restante,
+        costoUnitario: fallbackCost,
+        fecha: lastEntrada ? lastEntrada.fecha : 'N/A'
+      });
+    }
+
+    const totalVenta = (Number(precioUnitarioVenta) || 0) * (Number(cantidadRequerida) || 0);
+    const gananciaNominal = totalVenta - costoTotalFifo;
+
+    return {
+      costoTotalFifo,
+      gananciaNominal,
+      lotesDetalle
+    };
+  }
+
   function getArticuloMetrics(articuloId) {
     const articulo = (state.articulos || []).find(a => String(a.id) === String(articuloId));
-    if (!articulo) return { stock: 0, ultimoPrecioCaja: 0, ultimoCostoAdicCaja: 0, ultimoCostoUnitario: 0 };
+    if (!articulo) return { stock: 0, ultimoPrecioCaja: 0, ultimoCostoAdicCaja: 0, ultimoCostoUnitario: 0, valorInventarioFifo: 0 };
 
     const totalEntradasUnits = (state.entradas || [])
       .filter(e => String(e.articuloId) === String(articuloId))
@@ -493,7 +634,10 @@
 
     const ultimoCostoUnitario = (ultimoPrecioCaja + ultimoCostoAdicCaja) / uxb;
 
-    return { stock, ultimoPrecioCaja, ultimoCostoAdicCaja, ultimoCostoUnitario };
+    const batches = getArticuloFifoBatches(articuloId);
+    const valorInventarioFifo = batches.reduce((sum, b) => sum + (b.disponible * b.costoUnitarioBotella), 0);
+
+    return { stock, ultimoPrecioCaja, ultimoCostoAdicCaja, ultimoCostoUnitario, valorInventarioFifo };
   }
 
   function getMembresiaCalculations(membresia) {
@@ -643,7 +787,7 @@
     let totalBotellasStock = 0;
     (state.articulos || []).forEach(art => {
       const m = getArticuloMetrics(art.id);
-      totalStockVal += m.stock * m.ultimoCostoUnitario;
+      totalStockVal += (m.valorInventarioFifo !== undefined ? m.valorInventarioFifo : (m.stock * m.ultimoCostoUnitario));
       totalBotellasStock += m.stock;
     });
 
@@ -752,6 +896,30 @@
     if (elTotalDinero) elTotalDinero.textContent = formatCurrency(totalDineroVendido);
     const elTotalBotellas = document.getElementById('dash-total-botellas');
     if (elTotalBotellas) elTotalBotellas.textContent = `${totalBotellasVendidas} botellas vendidas en total`;
+
+    // Ganancia Nominal Neta (PEPS)
+    let totalGananciaNominal = 0;
+    (state.salidas || []).forEach(s => {
+      let g = Number(s.gananciaNominal);
+      if (s.gananciaNominal === undefined || s.gananciaNominal === null || isNaN(g)) {
+        const pu = Number(s.precioUnitario) || 0;
+        const cant = Number(s.cantidadBotellas) || 0;
+        const fifo = calculateFifoConsumption(s.articuloId, cant, pu, s.id);
+        g = fifo.gananciaNominal;
+        s.costoTotalFifo = fifo.costoTotalFifo;
+        s.gananciaNominal = fifo.gananciaNominal;
+        s.lotesDetalle = fifo.lotesDetalle;
+      }
+      totalGananciaNominal += g;
+    });
+
+    const pctGanancia = totalDineroVendido > 0 ? ((totalGananciaNominal / totalDineroVendido) * 100).toFixed(1) : '0.0';
+    const elGananciaTotal = document.getElementById('dash-ganancia-total');
+    if (elGananciaTotal) elGananciaTotal.textContent = formatCurrency(totalGananciaNominal);
+    const elPctGanancia = document.getElementById('dash-pct-ganancia');
+    if (elPctGanancia) elPctGanancia.textContent = `${pctGanancia}%`;
+    const elGananciaSubtext = document.getElementById('dash-ganancia-subtext');
+    if (elGananciaSubtext) elGananciaSubtext.textContent = `Margen nominal sobre ventas`;
 
     // Render Client Membership Deliveries Table (Resumen de Membresías por Cliente)
     const tableClientMembBody = document.getElementById('tbody-dash-client-memberships');
@@ -1157,7 +1325,7 @@
       const cajasEquiv = Math.floor(metrics.stock / uxb);
       const botellasSueltas = metrics.stock % uxb;
 
-      const totalVal = metrics.stock * metrics.ultimoCostoUnitario;
+      const totalVal = metrics.valorInventarioFifo !== undefined ? metrics.valorInventarioFifo : (metrics.stock * metrics.ultimoCostoUnitario);
       totalValuation += totalVal;
 
       let badgeClass = 'badge-success';
@@ -1243,7 +1411,7 @@
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay salidas/ventas registradas que coincidan con los filtros</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No hay salidas/ventas registradas que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -1263,6 +1431,36 @@
       const unitPrice = Number(s.precioUnitario) || 0;
       const totalVenta = unitPrice * (Number(s.cantidadBotellas) || 0);
 
+      // FIFO Profit Calculation / Details
+      let fifoInfo = null;
+      if (s.gananciaNominal !== undefined && s.gananciaNominal !== null && !isNaN(Number(s.gananciaNominal))) {
+        fifoInfo = {
+          costoTotalFifo: Number(s.costoTotalFifo) || 0,
+          gananciaNominal: Number(s.gananciaNominal) || 0,
+          lotesDetalle: s.lotesDetalle
+        };
+      } else {
+        fifoInfo = calculateFifoConsumption(s.articuloId, s.cantidadBotellas, unitPrice, s.id);
+        s.costoTotalFifo = fifoInfo.costoTotalFifo;
+        s.gananciaNominal = fifoInfo.gananciaNominal;
+        s.lotesDetalle = fifoInfo.lotesDetalle;
+      }
+
+      let lotesStr = '';
+      if (fifoInfo.lotesDetalle) {
+        let lotesArr = fifoInfo.lotesDetalle;
+        if (typeof lotesArr === 'string') {
+          try { lotesArr = JSON.parse(lotesArr); } catch (e) { lotesArr = []; }
+        }
+        if (Array.isArray(lotesArr)) {
+          lotesStr = lotesArr.map(l => `Lote #${l.numeroCompra} (${l.cantidad} bot. @ ${formatCurrency(l.costoUnitario)})`).join(' + ');
+        }
+      }
+
+      const gananciaVal = fifoInfo.gananciaNominal;
+      const gananciaColor = gananciaVal >= 0 ? 'var(--emerald)' : 'var(--rose)';
+      const gananciaSign = gananciaVal >= 0 ? '+' : '';
+
       html += `
         <tr>
           <td class="text-muted"><strong>${s.fecha}</strong></td>
@@ -1272,6 +1470,12 @@
           <td><strong>${s.cantidadBotellas}</strong> bot.</td>
           <td>${unitPrice > 0 ? formatCurrency(unitPrice) : '-'}</td>
           <td><strong>${totalVenta > 0 ? formatCurrency(totalVenta) : '-'}</strong></td>
+          <td>
+            <strong style="color:${gananciaColor}" title="${lotesStr || 'Costeo PEPS por lote'}">
+              ${gananciaSign}${formatCurrency(gananciaVal)}
+            </strong>
+            ${lotesStr ? `<br><small class="text-muted" style="font-size:0.7rem;">${lotesStr}</small>` : ''}
+          </td>
           <td>
             <button class="btn btn-ghost btn-sm btn-icon" onclick="window.deleteSalida('${s.id}')" title="Eliminar Venta"><i data-lucide="trash-2"></i></button>
           </td>
@@ -2374,6 +2578,8 @@
         const pPublico = latestEntrada ? (Number(latestEntrada.precioVentaPublico) || 0) : 0;
         const pClub = latestEntrada ? (Number(latestEntrada.precioVentaClub) || 0) : 0;
 
+        const fifo = calculateFifoConsumption(articuloId, cantidadBotellas, precioUnitario);
+
         state.salidas.push({
           id: generateUniqueId('sal'),
           fecha,
@@ -2383,7 +2589,10 @@
           cantidadBotellas,
           precioUnitario,
           precioVentaPublico: pPublico,
-          precioVentaClub: pClub
+          precioVentaClub: pClub,
+          costoTotalFifo: fifo.costoTotalFifo,
+          gananciaNominal: fifo.gananciaNominal,
+          lotesDetalle: fifo.lotesDetalle
         });
 
         logAuditoria('Salidas', 'Venta por Botella', `Venta de ${cantidadBotellas} botellas de ${art ? art.bodega + ' ' + art.etiqueta : 'Vino'} a cliente ${cli ? cli.nombre + ' ' + cli.apellido : 'Cliente'}`);
@@ -2414,6 +2623,8 @@
         const unitPricePerBottle = calc.totalBotellas > 0 ? (calc.precio / calc.totalBotellas) : 0;
         const transactionGroupId = Date.now().toString();
         calc.items.forEach((item, idx) => {
+          const fifo = calculateFifoConsumption(item.articuloId, item.cantidad, unitPricePerBottle);
+
           state.salidas.push({
             id: generateUniqueId(`sal-${transactionGroupId}`),
             fecha,
@@ -2423,7 +2634,10 @@
             membresiaId: memb.id,
             cantidadBotellas: item.cantidad,
             precioUnitario: unitPricePerBottle,
-            detalle: `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion}`
+            detalle: `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion}`,
+            costoTotalFifo: fifo.costoTotalFifo,
+            gananciaNominal: fifo.gananciaNominal,
+            lotesDetalle: fifo.lotesDetalle
           });
         });
 
