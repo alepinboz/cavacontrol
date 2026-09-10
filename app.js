@@ -835,7 +835,7 @@
   }
 
   function populateFilterSelects() {
-    // 1. Proveedores en Entradas
+    // 1. Proveedores en Entradas y en Artículos
     const provSelect = document.getElementById('filter-entradas-proveedor');
     if (provSelect) {
       const currentVal = provSelect.value;
@@ -844,7 +844,25 @@
       provSelect.innerHTML = options;
     }
 
-    // 2. Clientes en Salidas (ordenados A-Z)
+    const artProvSelect = document.getElementById('filter-articulos-proveedor');
+    if (artProvSelect) {
+      const currentVal = artProvSelect.value;
+      const options = `<option value="">-- Todos los Proveedores --</option>` +
+        (state.proveedores || []).map(p => `<option value="${p.id}" ${String(p.id) === String(currentVal) ? 'selected' : ''}>${p.nombre}</option>`).join('');
+      artProvSelect.innerHTML = options;
+    }
+
+    // 2. Provincias en Clientes
+    const proviSelect = document.getElementById('filter-clientes-provincia');
+    if (proviSelect) {
+      const currentVal = proviSelect.value;
+      const distProvs = Array.from(new Set((state.clientes || []).map(c => (c.provincia || '').trim()).filter(Boolean))).sort();
+      const options = `<option value="">-- Todas las Provincias --</option>` +
+        distProvs.map(p => `<option value="${p}" ${p.toLowerCase() === currentVal.toLowerCase() ? 'selected' : ''}>${p}</option>`).join('');
+      proviSelect.innerHTML = options;
+    }
+
+    // 3. Clientes en Salidas (ordenados A-Z)
     const cliSelect = document.getElementById('filter-salidas-cliente');
     if (cliSelect) {
       const currentVal = cliSelect.value;
@@ -858,7 +876,7 @@
       cliSelect.innerHTML = options;
     }
 
-    // 3. Membresías en Salidas
+    // 4. Membresías en Salidas
     const membSelect = document.getElementById('filter-salidas-membresia');
     if (membSelect) {
       const currentVal = membSelect.value;
@@ -1148,15 +1166,18 @@
   function renderMembresias() {
     const tbody = document.getElementById('tbody-membresias');
     const searchVal = (document.getElementById('search-membresias').value || '').toLowerCase();
+    const tipoFilter = document.getElementById('filter-membresias-tipo') ? document.getElementById('filter-membresias-tipo').value : '';
 
-    const list = (state.membresias || []).filter(m => 
-      (m.tipo && m.tipo.toLowerCase().includes(searchVal)) ||
-      m.codigo.toLowerCase().includes(searchVal) ||
-      m.descripcion.toLowerCase().includes(searchVal)
-    );
+    const list = (state.membresias || []).filter(m => {
+      const matchSearch = (m.tipo && m.tipo.toLowerCase().includes(searchVal)) ||
+        m.codigo.toLowerCase().includes(searchVal) ||
+        m.descripcion.toLowerCase().includes(searchVal);
+      const matchTipo = !tipoFilter || (m.tipo && m.tipo.toLowerCase().includes(tipoFilter.toLowerCase()));
+      return matchSearch && matchTipo;
+    });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay membresías registradas</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay membresías registradas que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -1236,14 +1257,32 @@
   function renderClientes() {
     const tbody = document.getElementById('tbody-clientes');
     const searchVal = (document.getElementById('search-clientes').value || '').toLowerCase();
+    const provinciaFilter = document.getElementById('filter-clientes-provincia') ? document.getElementById('filter-clientes-provincia').value : '';
+    const membresiaFilter = document.getElementById('filter-clientes-membresia') ? document.getElementById('filter-clientes-membresia').value : '';
 
-    const list = (state.clientes || []).filter(c =>
-      `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) ||
-      (c.telefono && c.telefono.includes(searchVal))
-    );
+    const list = (state.clientes || []).filter(c => {
+      const matchSearch = `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) ||
+        (c.telefono && c.telefono.includes(searchVal)) ||
+        (c.localidad && c.localidad.toLowerCase().includes(searchVal)) ||
+        (c.provincia && c.provincia.toLowerCase().includes(searchVal));
+
+      const matchProvincia = !provinciaFilter || (c.provincia && c.provincia.toLowerCase() === provinciaFilter.toLowerCase());
+
+      const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
+      let matchMembresia = true;
+      if (membresiaFilter === 'elite') {
+        matchMembresia = memb && (memb.tipo === 'Élite' || (memb.codigo && memb.codigo.toUpperCase().includes('ELI')));
+      } else if (membresiaFilter === 'seleccion') {
+        matchMembresia = memb && (memb.tipo === 'Selección' || (!memb.tipo && !memb.codigo.toUpperCase().includes('ELI')));
+      } else if (membresiaFilter === 'sin') {
+        matchMembresia = !memb;
+      }
+
+      return matchSearch && matchProvincia && matchMembresia;
+    });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No hay clientes registrados</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No hay clientes registrados que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -1279,15 +1318,27 @@
   function renderArticulos() {
     const tbody = document.getElementById('tbody-articulos');
     const searchVal = (document.getElementById('search-articulos').value || '').toLowerCase();
+    const provFilter = document.getElementById('filter-articulos-proveedor') ? document.getElementById('filter-articulos-proveedor').value : '';
+    const minCosto = document.getElementById('filter-articulos-costo-min') && document.getElementById('filter-articulos-costo-min').value !== '' ? parseFloat(document.getElementById('filter-articulos-costo-min').value) : null;
+    const maxCosto = document.getElementById('filter-articulos-costo-max') && document.getElementById('filter-articulos-costo-max').value !== '' ? parseFloat(document.getElementById('filter-articulos-costo-max').value) : null;
 
-    const list = getSortedArticulos().filter(a =>
-      a.bodega.toLowerCase().includes(searchVal) ||
-      a.etiqueta.toLowerCase().includes(searchVal) ||
-      a.cepa.toLowerCase().includes(searchVal)
-    );
+    const list = getSortedArticulos().filter(a => {
+      const matchSearch = a.bodega.toLowerCase().includes(searchVal) ||
+        a.etiqueta.toLowerCase().includes(searchVal) ||
+        a.cepa.toLowerCase().includes(searchVal);
+
+      const matchProv = !provFilter || (a.proveedoresIds && a.proveedoresIds.some(pid => String(pid) === String(provFilter)));
+
+      const metrics = getArticuloMetrics(a.id);
+      const costo = metrics.ultimoCostoUnitario || 0;
+      const matchMin = minCosto === null || isNaN(minCosto) || costo >= minCosto;
+      const matchMax = maxCosto === null || isNaN(maxCosto) || costo <= maxCosto;
+
+      return matchSearch && matchProv && matchMin && matchMax;
+    });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay artículos registrados</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted">No hay artículos registrados que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -1411,17 +1462,37 @@
   function renderStock() {
     const tbody = document.getElementById('tbody-stock');
     const searchVal = (document.getElementById('search-stock').value || '').toLowerCase();
+    const estadoFilter = document.getElementById('filter-stock-estado') ? document.getElementById('filter-stock-estado').value : '';
+    const minCosto = document.getElementById('filter-stock-costo-min') && document.getElementById('filter-stock-costo-min').value !== '' ? parseFloat(document.getElementById('filter-stock-costo-min').value) : null;
+    const maxCosto = document.getElementById('filter-stock-costo-max') && document.getElementById('filter-stock-costo-max').value !== '' ? parseFloat(document.getElementById('filter-stock-costo-max').value) : null;
 
     let totalValuation = 0;
 
-    const list = getSortedArticulos().filter(a =>
-      a.bodega.toLowerCase().includes(searchVal) ||
-      a.etiqueta.toLowerCase().includes(searchVal) ||
-      a.cepa.toLowerCase().includes(searchVal)
-    );
+    const list = getSortedArticulos().filter(a => {
+      const matchSearch = a.bodega.toLowerCase().includes(searchVal) ||
+        a.etiqueta.toLowerCase().includes(searchVal) ||
+        a.cepa.toLowerCase().includes(searchVal);
+
+      const metrics = getArticuloMetrics(a.id);
+
+      let matchEstado = true;
+      if (estadoFilter === 'en_stock') {
+        matchEstado = metrics.stock > 6;
+      } else if (estadoFilter === 'stock_bajo') {
+        matchEstado = metrics.stock > 0 && metrics.stock <= 6;
+      } else if (estadoFilter === 'sin_stock') {
+        matchEstado = metrics.stock === 0;
+      }
+
+      const costo = metrics.ultimoCostoUnitario || 0;
+      const matchMin = minCosto === null || isNaN(minCosto) || costo >= minCosto;
+      const matchMax = maxCosto === null || isNaN(maxCosto) || costo <= maxCosto;
+
+      return matchSearch && matchEstado && matchMin && matchMax;
+    });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">No hay productos en inventario</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">No hay productos en inventario que coincidan con los filtros</td></tr>`;
       document.getElementById('stock-total-val').textContent = formatCurrency(0);
       return;
     }
@@ -3493,9 +3564,14 @@
   // Debounced search input filters (150ms delay)
   let searchDebounceTimeout = null;
   [
-    'search-membresias', 'search-proveedores', 'search-clientes', 'search-articulos', 'search-entradas', 'search-stock', 'search-salidas', 'search-auditoria', 'filter-auditoria-modulo',
-    'filter-entradas-proveedor', 'filter-entradas-desde', 'filter-entradas-hasta', 'sort-entradas-by',
-    'filter-salidas-cliente', 'filter-salidas-tipo', 'filter-salidas-membresia', 'filter-salidas-desde', 'filter-salidas-hasta', 'sort-salidas-by'
+    'search-membresias', 'filter-membresias-tipo',
+    'search-proveedores',
+    'search-clientes', 'filter-clientes-provincia', 'filter-clientes-membresia',
+    'search-articulos', 'filter-articulos-proveedor', 'filter-articulos-costo-min', 'filter-articulos-costo-max',
+    'search-entradas', 'filter-entradas-proveedor', 'filter-entradas-desde', 'filter-entradas-hasta', 'sort-entradas-by',
+    'search-stock', 'filter-stock-estado', 'filter-stock-costo-min', 'filter-stock-costo-max',
+    'search-salidas', 'filter-salidas-cliente', 'filter-salidas-tipo', 'filter-salidas-membresia', 'filter-salidas-desde', 'filter-salidas-hasta', 'sort-salidas-by',
+    'search-auditoria', 'filter-auditoria-modulo'
   ].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -3536,6 +3612,359 @@
       renderSalidas();
     });
   }
+
+  // --- EXPORT TO EXCEL (CSV UTF-8 BOM) & PDF ---
+  window.exportModuleData = function (moduleName, format) {
+    let title = '';
+    let headers = [];
+    let rows = [];
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-AR') + ' ' + now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+    if (moduleName === 'membresias') {
+      title = 'Reporte de Membresías';
+      headers = ['Tipo', 'Código', 'Descripción', 'Botellas Incluidas', 'Vigencia', 'Precio ($)'];
+      const searchVal = (document.getElementById('search-membresias').value || '').toLowerCase();
+      const tipoFilter = document.getElementById('filter-membresias-tipo') ? document.getElementById('filter-membresias-tipo').value : '';
+      const list = (state.membresias || []).filter(m => {
+        const matchSearch = (m.tipo && m.tipo.toLowerCase().includes(searchVal)) || m.codigo.toLowerCase().includes(searchVal) || m.descripcion.toLowerCase().includes(searchVal);
+        const matchTipo = !tipoFilter || (m.tipo && m.tipo.toLowerCase().includes(tipoFilter.toLowerCase()));
+        return matchSearch && matchTipo;
+      });
+      rows = list.map(m => {
+        const calc = getMembresiaCalculations(m);
+        return [
+          m.tipo || 'Selección',
+          m.codigo,
+          m.descripcion,
+          `${calc.totalBotellas} bot.`,
+          `${m.fechaDesde} a ${m.fechaHasta}`,
+          formatCurrency(m.precio || 0)
+        ];
+      });
+    } else if (moduleName === 'proveedores') {
+      title = 'Reporte de Proveedores';
+      headers = ['Nombre', 'Teléfono', 'Email', 'Compras Realizadas'];
+      const searchVal = (document.getElementById('search-proveedores').value || '').toLowerCase();
+      const list = (state.proveedores || []).filter(p => p.nombre.toLowerCase().includes(searchVal) || (p.email && p.email.toLowerCase().includes(searchVal)));
+      rows = list.map(p => [
+        p.nombre,
+        p.telefono || '-',
+        p.email || '-',
+        `${getProveedorComprasCount(p.id)} compras`
+      ]);
+    } else if (moduleName === 'clientes') {
+      title = 'Reporte de Clientes';
+      headers = ['Nombre y Apellido', 'Teléfono', 'Provincia', 'Localidad', 'Dirección', 'Membresía Asignada', 'Entregas (Botellas)'];
+      const searchVal = (document.getElementById('search-clientes').value || '').toLowerCase();
+      const provinciaFilter = document.getElementById('filter-clientes-provincia') ? document.getElementById('filter-clientes-provincia').value : '';
+      const membresiaFilter = document.getElementById('filter-clientes-membresia') ? document.getElementById('filter-clientes-membresia').value : '';
+      const list = (state.clientes || []).filter(c => {
+        const matchSearch = `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) || (c.telefono && c.telefono.includes(searchVal));
+        const matchProvincia = !provinciaFilter || (c.provincia && c.provincia.toLowerCase() === provinciaFilter.toLowerCase());
+        const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
+        let matchMembresia = true;
+        if (membresiaFilter === 'elite') matchMembresia = memb && (memb.tipo === 'Élite' || (memb.codigo && memb.codigo.toUpperCase().includes('ELI')));
+        else if (membresiaFilter === 'seleccion') matchMembresia = memb && (memb.tipo === 'Selección' || (!memb.tipo && !memb.codigo.toUpperCase().includes('ELI')));
+        else if (membresiaFilter === 'sin') matchMembresia = !memb;
+        return matchSearch && matchProvincia && matchMembresia;
+      });
+      rows = list.map(c => {
+        const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
+        const membStr = memb ? `[${memb.tipo || 'Selección'}] ${memb.descripcion} (${memb.codigo})` : 'Sin membresía';
+        return [
+          `${c.nombre} ${c.apellido}`,
+          c.telefono || '-',
+          c.provincia || '-',
+          c.localidad || '-',
+          c.direccion || '-',
+          membStr,
+          `${getClienteEntregasCount(c.id)} bot.`
+        ];
+      });
+    } else if (moduleName === 'articulos') {
+      title = 'Catálogo de Artículos y Vinos';
+      headers = ['Bodega', 'Etiqueta', 'Cepa', 'UxB', 'Proveedores', 'Último Costo Unit. ($)', 'Stock Actual (Bot.)'];
+      const searchVal = (document.getElementById('search-articulos').value || '').toLowerCase();
+      const provFilter = document.getElementById('filter-articulos-proveedor') ? document.getElementById('filter-articulos-proveedor').value : '';
+      const minCosto = document.getElementById('filter-articulos-costo-min') && document.getElementById('filter-articulos-costo-min').value !== '' ? parseFloat(document.getElementById('filter-articulos-costo-min').value) : null;
+      const maxCosto = document.getElementById('filter-articulos-costo-max') && document.getElementById('filter-articulos-costo-max').value !== '' ? parseFloat(document.getElementById('filter-articulos-costo-max').value) : null;
+      const list = getSortedArticulos().filter(a => {
+        const matchSearch = a.bodega.toLowerCase().includes(searchVal) || a.etiqueta.toLowerCase().includes(searchVal) || a.cepa.toLowerCase().includes(searchVal);
+        const matchProv = !provFilter || (a.proveedoresIds && a.proveedoresIds.some(pid => String(pid) === String(provFilter)));
+        const metrics = getArticuloMetrics(a.id);
+        const costo = metrics.ultimoCostoUnitario || 0;
+        const matchMin = minCosto === null || isNaN(minCosto) || costo >= minCosto;
+        const matchMax = maxCosto === null || isNaN(maxCosto) || costo <= maxCosto;
+        return matchSearch && matchProv && matchMin && matchMax;
+      });
+      rows = list.map(a => {
+        const metrics = getArticuloMetrics(a.id);
+        const provs = (a.proveedoresIds || []).map(pid => {
+          const p = state.proveedores.find(pr => String(pr.id) === String(pid));
+          return p ? p.nombre : null;
+        }).filter(Boolean).join(', ') || 'Ninguno';
+        return [
+          a.bodega,
+          a.etiqueta,
+          a.cepa,
+          `${a.uxb} un.`,
+          provs,
+          formatCurrency(metrics.ultimoCostoUnitario),
+          `${metrics.stock} bot.`
+        ];
+      });
+    } else if (moduleName === 'entradas') {
+      title = 'Reporte de Compras (Entradas de Stock)';
+      headers = ['N° Compra', 'Artículo / Vino', 'Cepa', 'Proveedor', 'Cajas', 'Unidades', 'Precio Caja ($)', 'Costo Adic. Caja ($)', 'Costo Unit. Botella ($)', 'Total Compra ($)', 'Precio Público ($)', 'Precio BORRA CLUB ($)', 'Fecha'];
+      const searchVal = (document.getElementById('search-entradas').value || '').toLowerCase();
+      const provFilter = document.getElementById('filter-entradas-proveedor') ? document.getElementById('filter-entradas-proveedor').value : '';
+      const desdeFilter = document.getElementById('filter-entradas-desde') ? document.getElementById('filter-entradas-desde').value : '';
+      const hastaFilter = document.getElementById('filter-entradas-hasta') ? document.getElementById('filter-entradas-hasta').value : '';
+      const sortBy = document.getElementById('sort-entradas-by') ? document.getElementById('sort-entradas-by').value : 'num_desc';
+      const list = (state.entradas || []).filter(e => {
+        const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
+        const prov = state.proveedores.find(p => String(p.id) === String(e.proveedorId));
+        const artName = art ? `${art.bodega} ${art.etiqueta}`.toLowerCase() : '';
+        const provName = prov ? prov.nombre.toLowerCase() : '';
+        const numStr = String(e.numeroCompra);
+        const matchSearch = !searchVal || numStr.includes(searchVal) || artName.includes(searchVal) || provName.includes(searchVal);
+        const matchProv = !provFilter || String(e.proveedorId) === String(provFilter);
+        const eDateStr = (e.fecha || '').substring(0, 10);
+        const matchDesde = !desdeFilter || (eDateStr && eDateStr >= desdeFilter);
+        const matchHasta = !hastaFilter || (eDateStr && eDateStr <= hastaFilter);
+        return matchSearch && matchProv && matchDesde && matchHasta;
+      });
+      list.sort((a, b) => {
+        if (sortBy === 'num_desc') return Number(b.numeroCompra) - Number(a.numeroCompra);
+        if (sortBy === 'num_asc') return Number(a.numeroCompra) - Number(b.numeroCompra);
+        if (sortBy === 'fecha_desc') return new Date(b.fecha || 0) - new Date(a.fecha || 0);
+        if (sortBy === 'fecha_asc') return new Date(a.fecha || 0) - new Date(b.fecha || 0);
+        return Number(b.numeroCompra) - Number(a.numeroCompra);
+      });
+      rows = list.map(e => {
+        const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
+        const prov = state.proveedores.find(p => String(p.id) === String(e.proveedorId));
+        const precioCaja = Number(e.precioCaja) || 0;
+        const costoAdicCaja = Number(e.costoAdicionalCaja) || 0;
+        const uxb = art ? (Number(art.uxb) || 1) : 1;
+        const costoUnitarioBotella = (precioCaja + costoAdicCaja) / uxb;
+        const totalCompra = Number(e.cantidadCajas) * (precioCaja + costoAdicCaja);
+        return [
+          `#${e.numeroCompra}`,
+          art ? `${art.bodega} - ${art.etiqueta}` : 'N/A',
+          e.cepa || (art ? art.cepa : '-'),
+          prov ? prov.nombre : 'N/A',
+          `${e.cantidadCajas} cj.`,
+          `+${e.unidadesSumadas} bot.`,
+          formatCurrency(precioCaja),
+          formatCurrency(costoAdicCaja),
+          formatCurrency(costoUnitarioBotella),
+          formatCurrency(totalCompra),
+          formatCurrency(e.precioVentaPublico || 0),
+          formatCurrency(e.precioVentaClub || 0),
+          e.fecha || '-'
+        ];
+      });
+    } else if (moduleName === 'stock') {
+      title = 'Reporte de Inventario y Valorización de Stock';
+      headers = ['Bodega', 'Etiqueta', 'Cepa', 'UxB', 'Stock Físico (Bot.)', 'Cajas Equiv.', 'Último Costo Unit. ($)', 'Valor Total Inventario ($)', 'Estado'];
+      const searchVal = (document.getElementById('search-stock').value || '').toLowerCase();
+      const estadoFilter = document.getElementById('filter-stock-estado') ? document.getElementById('filter-stock-estado').value : '';
+      const minCosto = document.getElementById('filter-stock-costo-min') && document.getElementById('filter-stock-costo-min').value !== '' ? parseFloat(document.getElementById('filter-stock-costo-min').value) : null;
+      const maxCosto = document.getElementById('filter-stock-costo-max') && document.getElementById('filter-stock-costo-max').value !== '' ? parseFloat(document.getElementById('filter-stock-costo-max').value) : null;
+      const list = getSortedArticulos().filter(a => {
+        const matchSearch = a.bodega.toLowerCase().includes(searchVal) || a.etiqueta.toLowerCase().includes(searchVal) || a.cepa.toLowerCase().includes(searchVal);
+        const metrics = getArticuloMetrics(a.id);
+        let matchEstado = true;
+        if (estadoFilter === 'en_stock') matchEstado = metrics.stock > 6;
+        else if (estadoFilter === 'stock_bajo') matchEstado = metrics.stock > 0 && metrics.stock <= 6;
+        else if (estadoFilter === 'sin_stock') matchEstado = metrics.stock === 0;
+        const costo = metrics.ultimoCostoUnitario || 0;
+        const matchMin = minCosto === null || isNaN(minCosto) || costo >= minCosto;
+        const matchMax = maxCosto === null || isNaN(maxCosto) || costo <= maxCosto;
+        return matchSearch && matchEstado && matchMin && matchMax;
+      });
+      rows = list.map(a => {
+        const metrics = getArticuloMetrics(a.id);
+        const uxb = Number(a.uxb) || 1;
+        const cajasEquiv = Math.floor(metrics.stock / uxb);
+        const botellasSueltas = metrics.stock % uxb;
+        const totalVal = metrics.valorInventarioFifo !== undefined ? metrics.valorInventarioFifo : (metrics.stock * metrics.ultimoCostoUnitario);
+        const estadoText = metrics.stock === 0 ? 'Sin Stock' : (metrics.stock <= 6 ? 'Stock Bajo' : 'En Stock');
+        return [
+          a.bodega,
+          a.etiqueta,
+          a.cepa,
+          `${uxb} un.`,
+          `${metrics.stock} bot.`,
+          `${cajasEquiv} cj.${botellasSueltas > 0 ? ` + ${botellasSueltas} bot.` : ''}`,
+          formatCurrency(metrics.ultimoCostoUnitario),
+          formatCurrency(totalVal),
+          estadoText
+        ];
+      });
+    } else if (moduleName === 'salidas') {
+      title = 'Reporte de Ventas y Entregas (Salidas)';
+      headers = ['Fecha', 'Cliente', 'Tipo Venta', 'Detalle / Vino', 'Botellas', 'Precio Unit. ($)', 'Total Venta ($)', 'Ganancia Nominal (PEPS) ($)'];
+      const searchVal = (document.getElementById('search-salidas').value || '').toLowerCase();
+      const clienteFilter = document.getElementById('filter-salidas-cliente') ? document.getElementById('filter-salidas-cliente').value : '';
+      const tipoFilter = document.getElementById('filter-salidas-tipo') ? document.getElementById('filter-salidas-tipo').value : '';
+      const membresiaFilter = document.getElementById('filter-salidas-membresia') ? document.getElementById('filter-salidas-membresia').value : '';
+      const desdeFilter = document.getElementById('filter-salidas-desde') ? document.getElementById('filter-salidas-desde').value : '';
+      const hastaFilter = document.getElementById('filter-salidas-hasta') ? document.getElementById('filter-salidas-hasta').value : '';
+      const sortBy = document.getElementById('sort-salidas-by') ? document.getElementById('sort-salidas-by').value : 'fecha_desc';
+      const list = (state.salidas || []).filter(s => {
+        const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
+        const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
+        const cliName = cli ? `${cli.nombre} ${cli.apellido}`.toLowerCase() : '';
+        const artName = art ? `${art.bodega} ${art.etiqueta} ${art.cepa}`.toLowerCase() : '';
+        const detText = (s.detalle || '').toLowerCase();
+        const matchSearch = !searchVal || cliName.includes(searchVal) || artName.includes(searchVal) || detText.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
+        const matchCliente = !clienteFilter || String(s.clienteId) === String(clienteFilter);
+        const matchTipo = !tipoFilter || s.tipoVenta === tipoFilter;
+        const matchMembresia = !membresiaFilter || String(s.membresiaId) === String(membresiaFilter);
+        const sDateStr = (s.fecha || '').substring(0, 10);
+        const matchDesde = !desdeFilter || (sDateStr && sDateStr >= desdeFilter);
+        const matchHasta = !hastaFilter || (sDateStr && sDateStr <= hastaFilter);
+        return matchSearch && matchCliente && matchTipo && matchMembresia && matchDesde && matchHasta;
+      });
+      list.sort((a, b) => {
+        if (sortBy === 'fecha_desc') return new Date(b.fecha || 0) - new Date(a.fecha || 0);
+        if (sortBy === 'fecha_asc') return new Date(a.fecha || 0) - new Date(b.fecha || 0);
+        return new Date(b.fecha || 0) - new Date(a.fecha || 0);
+      });
+      rows = list.map(s => {
+        const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
+        const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
+        const isMembresia = s.tipoVenta === 'MEMBRESIA';
+        let detalleDisplay = art ? `${art.bodega} - ${art.etiqueta}` : (s.detalle || 'Vino N/A');
+        if (isMembresia && s.membresiaId) {
+          const memb = state.membresias.find(m => String(m.id) === String(s.membresiaId));
+          if (memb) detalleDisplay = `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion} (${detalleDisplay})`;
+        }
+        const unitPrice = Number(s.precioUnitario) || 0;
+        const totalVenta = unitPrice * (Number(s.cantidadBotellas) || 0);
+        const ganancia = s.gananciaNominal !== undefined ? Number(s.gananciaNominal) : 0;
+        return [
+          s.fecha || '-',
+          cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A',
+          isMembresia ? 'Membresía' : 'Venta Botella',
+          detalleDisplay,
+          `${s.cantidadBotellas} bot.`,
+          formatCurrency(unitPrice),
+          formatCurrency(totalVenta),
+          formatCurrency(ganancia)
+        ];
+      });
+    } else if (moduleName === 'auditoria') {
+      title = 'Reporte de Auditoría y Logs de Movimiento';
+      headers = ['Fecha y Hora', 'Usuario', 'Módulo', 'Acción Ejecutada', 'Detalle'];
+      const searchVal = (document.getElementById('search-auditoria').value || '').toLowerCase();
+      const moduloFilter = (document.getElementById('filter-auditoria-modulo').value || '').toLowerCase();
+      const list = (state.auditoriaLogs || []).filter(log => {
+        const matchSearch = log.usuario.toLowerCase().includes(searchVal) || log.accion.toLowerCase().includes(searchVal) || log.detalle.toLowerCase().includes(searchVal);
+        const matchModulo = !moduloFilter || log.modulo.toLowerCase() === moduloFilter;
+        return matchSearch && matchModulo;
+      });
+      rows = list.map(log => [
+        log.fechaHora,
+        log.usuario,
+        log.modulo,
+        log.accion,
+        log.detalle
+      ]);
+    }
+
+    if (format === 'excel') {
+      // Export UTF-8 BOM CSV for Excel
+      const csvLines = [
+        `"BORRA - CavaControl - ${title}"`,
+        `"Fecha de generación: ${dateStr}"`,
+        '""',
+        headers.map(h => `"${h.replace(/"/g, '""')}"`).join(';')
+      ];
+      rows.forEach(r => {
+        const line = r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';');
+        csvLines.push(line);
+      });
+
+      const csvContent = '\uFEFF' + csvLines.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BORRA_${moduleName}_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Archivo Excel (${moduleName}) descargado exitosamente`, 'success');
+    } else if (format === 'pdf') {
+      // PDF Printable Window
+      const printWin = window.open('', '_blank', 'width=1000,height=750');
+      if (!printWin) {
+        showToast('El navegador bloqueó la ventana emergente de impresión', 'error');
+        return;
+      }
+
+      let tableHtml = `<table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:15px;">`;
+      tableHtml += `<thead style="background:#48293d; color:#ffffff;"><tr>`;
+      headers.forEach(h => {
+        tableHtml += `<th style="border:1px solid #ddd; padding:8px; text-align:left;">${h}</th>`;
+      });
+      tableHtml += `</tr></thead><tbody>`;
+
+      rows.forEach((r, idx) => {
+        const bg = idx % 2 === 0 ? '#ffffff' : '#f9f8f6';
+        tableHtml += `<tr style="background:${bg};">`;
+        r.forEach(val => {
+          tableHtml += `<td style="border:1px solid #ddd; padding:8px;">${val}</td>`;
+        });
+        tableHtml += `</tr>`;
+      });
+      tableHtml += `</tbody></table>`;
+
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>BORRA CavaControl - ${title}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+            .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #48293d; padding-bottom: 10px; }
+            .header h1 { margin: 0; color: #48293d; font-size: 20px; }
+            .header p { margin: 2px 0 0 0; font-size: 11px; color: #666; }
+            .badge { background: #48293d; color: #d4af37; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+            @media print {
+              @page { size: landscape; margin: 10mm; }
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>BORRA - Vinos de Selección</h1>
+              <p>CavaControl | ${title}</p>
+            </div>
+            <div style="text-align:right;">
+              <span class="badge">Generado: ${dateStr}</span>
+              <p style="font-size:11px; color:#666; margin-top:4px;">Total Registros: ${rows.length}</p>
+            </div>
+          </div>
+          ${tableHtml}
+          <script>
+            setTimeout(function() { window.print(); }, 500);
+          </script>
+        </body>
+        </html>
+      `);
+      printWin.document.close();
+    }
+  };
 
   window.closeModal = closeModal;
   window.performLogin = performLogin;

@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BORRA - CavaControl | Vinos de Selección</title>
+  <!-- Favicon Icon B de BORRA (#48293d) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2348293d'/><path d='M30 22h24c12 0 19 6 19 14 0 6-4 11-10 13 8 2 13 8 13 16 0 9-8 16-21 16H30V22zm14 11v11h10c4 0 7-2 7-5.5s-3-5.5-7-5.5H44zm0 21v13h12c5 0 8-2.5 8-6.5s-3-6.5-8-6.5H44z' fill='%23d4af37'/></svg>">
   <!-- Google Fonts: Inter & Playfair Display -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -269,14 +271,27 @@
 
         <!-- MEMBRESÍAS VIEW -->
         <section id="view-membresias" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
-              <input type="text" id="search-membresias" placeholder="Buscar por tipo, código o descripción...">
+              <input type="text" id="search-membresias" placeholder="Buscar por código o descripción...">
             </div>
-            <button class="btn btn-primary" id="btn-add-membresia">
-              <i data-lucide="plus"></i> Nueva Membresía
-            </button>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <select id="filter-membresias-tipo" class="form-control" style="width:auto; padding:0.4rem 0.8rem;">
+                <option value="">-- Todos los Tipos --</option>
+                <option value="Élite">Membresía Élite</option>
+                <option value="Selección">Membresía Selección</option>
+              </select>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('membresias', 'excel')" title="Exportar Membresías a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('membresias', 'pdf')" title="Exportar Membresías a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
+              <button class="btn btn-primary" id="btn-add-membresia">
+                <i data-lucide="plus"></i> Nueva Membresía
+              </button>
+            </div>
           </div>
 
           <div class="card shadow-sm">
@@ -309,7 +324,13 @@
               <i data-lucide="search"></i>
               <input type="text" id="search-proveedores" placeholder="Buscar proveedor...">
             </div>
-            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <button class="btn btn-ghost" onclick="window.exportModuleData('proveedores', 'excel')" title="Exportar Proveedores a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('proveedores', 'pdf')" title="Exportar Proveedores a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
               <label class="btn btn-secondary" title="Importar proveedores desde CSV/TXT">
                 <i data-lucide="file-up"></i> Importar CSV
                 <input type="file" id="csv-proveedores-file" accept=".csv,.txt" style="display:none;">
@@ -342,12 +363,27 @@
 
         <!-- CLIENTES VIEW -->
         <section id="view-clientes" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
               <input type="text" id="search-clientes" placeholder="Buscar cliente por nombre o teléfono...">
             </div>
-            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <select id="filter-clientes-provincia" class="form-control" style="width:auto; padding:0.4rem 0.8rem;">
+                <option value="">-- Todas las Provincias --</option>
+              </select>
+              <select id="filter-clientes-membresia" class="form-control" style="width:auto; padding:0.4rem 0.8rem;">
+                <option value="">-- Todas las Membresías --</option>
+                <option value="elite">Con Membresía Élite</option>
+                <option value="seleccion">Con Membresía Selección</option>
+                <option value="sin">Sin Membresía</option>
+              </select>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('clientes', 'excel')" title="Exportar Clientes a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('clientes', 'pdf')" title="Exportar Clientes a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
               <label class="btn btn-secondary" title="Importar clientes desde CSV/TXT">
                 <i data-lucide="file-up"></i> Importar CSV
                 <input type="file" id="csv-clientes-file" accept=".csv,.txt" style="display:none;">
@@ -382,12 +418,23 @@
 
         <!-- ARTÍCULOS VIEW -->
         <section id="view-articulos" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
               <input type="text" id="search-articulos" placeholder="Buscar por bodega, etiqueta o cepa...">
             </div>
-            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <select id="filter-articulos-proveedor" class="form-control" style="width:auto; padding:0.4rem 0.8rem;">
+                <option value="">-- Todos los Proveedores --</option>
+              </select>
+              <input type="number" id="filter-articulos-costo-min" class="form-control" placeholder="Costo Mín ($)" style="width:130px; padding:0.4rem 0.6rem;">
+              <input type="number" id="filter-articulos-costo-max" class="form-control" placeholder="Costo Máx ($)" style="width:130px; padding:0.4rem 0.6rem;">
+              <button class="btn btn-ghost" onclick="window.exportModuleData('articulos', 'excel')" title="Exportar Artículos a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('articulos', 'pdf')" title="Exportar Artículos a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
               <label class="btn btn-secondary" title="Importar artículos desde CSV/TXT">
                 <i data-lucide="file-up"></i> Importar CSV
                 <input type="file" id="csv-articulos-file" accept=".csv,.txt" style="display:none;">
@@ -428,7 +475,13 @@
               <i data-lucide="search"></i>
               <input type="text" id="search-entradas" placeholder="Buscar por N° compra, artículo o proveedor...">
             </div>
-            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <button class="btn btn-ghost" onclick="window.exportModuleData('entradas', 'excel')" title="Exportar Entradas a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('entradas', 'pdf')" title="Exportar Entradas a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
               <label class="btn btn-secondary" title="Importar compras (entradas) desde CSV/TXT">
                 <i data-lucide="file-up"></i> Importar CSV
                 <input type="file" id="csv-entradas-file" accept=".csv,.txt" style="display:none;">
@@ -501,10 +554,26 @@
 
         <!-- STOCK VIEW -->
         <section id="view-stock" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
               <input type="text" id="search-stock" placeholder="Filtrar por bodega, etiqueta o cepa...">
+            </div>
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <select id="filter-stock-estado" class="form-control" style="width:auto; padding:0.4rem 0.8rem;">
+                <option value="">-- Todos los Estados --</option>
+                <option value="en_stock">En Stock (&gt; 6)</option>
+                <option value="stock_bajo">Stock Bajo (&le; 6)</option>
+                <option value="sin_stock">Sin Stock (0)</option>
+              </select>
+              <input type="number" id="filter-stock-costo-min" class="form-control" placeholder="Costo Mín ($)" style="width:130px; padding:0.4rem 0.6rem;">
+              <input type="number" id="filter-stock-costo-max" class="form-control" placeholder="Costo Máx ($)" style="width:130px; padding:0.4rem 0.6rem;">
+              <button class="btn btn-ghost" onclick="window.exportModuleData('stock', 'excel')" title="Exportar Stock a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('stock', 'pdf')" title="Exportar Stock a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
             </div>
             <div class="stock-summary-badge">
               <span>Total Valorizado: <strong id="stock-total-val">$0</strong></span>
@@ -544,7 +613,13 @@
               <i data-lucide="search"></i>
               <input type="text" id="search-salidas" placeholder="Buscar por cliente, vino o tipo...">
             </div>
-            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <button class="btn btn-ghost" onclick="window.exportModuleData('salidas', 'excel')" title="Exportar Salidas a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('salidas', 'pdf')" title="Exportar Salidas a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
               <button class="btn btn-secondary" onclick="window.recalculateAllSalidasFifo(true)" title="Recalcular el costeo PEPS y ganancias de todas las ventas históricas">
                 <i data-lucide="refresh-cw"></i> Recalcular Ganancias PEPS
               </button>
@@ -628,12 +703,18 @@
 
         <!-- AUDITORÍA / MONITOR DE MOVIMIENTOS VIEW -->
         <section id="view-auditoria" class="view-section">
-          <div class="section-toolbar">
+          <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
               <input type="text" id="search-auditoria" placeholder="Buscar en logs por usuario, acción o detalle...">
             </div>
-            <div class="toolbar-actions">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <button class="btn btn-ghost" onclick="window.exportModuleData('auditoria', 'excel')" title="Exportar Log de Auditoría a Excel (CSV)">
+                <i data-lucide="file-spreadsheet"></i> Excel
+              </button>
+              <button class="btn btn-ghost" onclick="window.exportModuleData('auditoria', 'pdf')" title="Exportar Log de Auditoría a PDF / Imprimir">
+                <i data-lucide="file-text"></i> PDF
+              </button>
               <select id="filter-auditoria-modulo" class="form-control" style="width: auto;">
                 <option value="">-- Todos los Módulos --</option>
                 <option value="Auth">Autenticación</option>
