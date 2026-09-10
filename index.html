@@ -488,6 +488,7 @@
                     <th>Precio Venta Público</th>
                     <th>Precio BORRA CLUB</th>
                     <th>Fecha</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-entradas">
@@ -543,7 +544,10 @@
               <i data-lucide="search"></i>
               <input type="text" id="search-salidas" placeholder="Buscar por cliente, vino o tipo...">
             </div>
-            <div class="toolbar-actions" style="display:flex; gap:0.5rem">
+            <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <button class="btn btn-secondary" onclick="window.recalculateAllSalidasFifo(true)" title="Recalcular el costeo PEPS y ganancias de todas las ventas históricas">
+                <i data-lucide="refresh-cw"></i> Recalcular Ganancias PEPS
+              </button>
               <label class="btn btn-secondary" title="Importar ventas (salidas) desde CSV/TXT">
                 <i data-lucide="file-up"></i> Importar CSV
                 <input type="file" id="csv-salidas-file" accept=".csv,.txt" style="display:none;">

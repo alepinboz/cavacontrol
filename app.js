@@ -561,6 +561,15 @@
     const articulo = (state.articulos || []).find(a => String(a.id) === String(articuloId));
     const batches = getArticuloFifoBatches(articuloId, excludeSalidaId);
 
+    const validEntradaCosts = [...(state.entradas || [])]
+      .filter(e => String(e.articuloId) === String(articuloId))
+      .map(e => {
+        const uxb = articulo ? (Number(articulo.uxb) || 6) : 6;
+        return (Number(e.precioCaja || 0) + Number(e.costoAdicionalCaja || 0)) / uxb;
+      })
+      .filter(c => c > 0);
+    const nonZeroFallbackCost = validEntradaCosts.length > 0 ? validEntradaCosts[validEntradaCosts.length - 1] : 0;
+
     let restante = Math.max(0, Number(cantidadRequerida) || 0);
     let costoTotalFifo = 0;
     const lotesDetalle = [];
@@ -569,14 +578,18 @@
       if (restante <= 0) break;
       if (batch.disponible > 0) {
         const cantTomada = Math.min(batch.disponible, restante);
-        const costoSubtotal = cantTomada * batch.costoUnitarioBotella;
+        let unitCost = batch.costoUnitarioBotella;
+        if (unitCost === 0 && nonZeroFallbackCost > 0) {
+          unitCost = nonZeroFallbackCost;
+        }
+        const costoSubtotal = cantTomada * unitCost;
         costoTotalFifo += costoSubtotal;
         restante -= cantTomada;
 
         lotesDetalle.push({
           numeroCompra: batch.numeroCompra,
           cantidad: cantTomada,
-          costoUnitario: batch.costoUnitarioBotella,
+          costoUnitario: unitCost,
           fecha: batch.fecha
         });
       }
@@ -587,9 +600,12 @@
         .filter(e => String(e.articuloId) === String(articuloId))
         .sort((a, b) => (Number(b.numeroCompra) || 0) - (Number(a.numeroCompra) || 0))[0];
       const uxb = articulo ? (Number(articulo.uxb) || 6) : 6;
-      const fallbackCost = lastEntrada
+      let fallbackCost = lastEntrada
         ? (Number(lastEntrada.precioCaja || 0) + Number(lastEntrada.costoAdicionalCaja || 0)) / uxb
         : 0;
+      if (fallbackCost === 0 && nonZeroFallbackCost > 0) {
+        fallbackCost = nonZeroFallbackCost;
+      }
 
       costoTotalFifo += (restante * fallbackCost);
       lotesDetalle.push({
@@ -609,6 +625,36 @@
       lotesDetalle
     };
   }
+
+  window.recalculateAllSalidasFifo = function (notify = false) {
+    if (!state.salidas || state.salidas.length === 0) {
+      if (notify) showToast('No hay ventas para recalar', 'info');
+      return;
+    }
+
+    const sortedSalidas = [...state.salidas].sort((a, b) => {
+      const dA = a.fecha ? new Date(a.fecha.replace(' ', 'T')).getTime() : 0;
+      const dB = b.fecha ? new Date(b.fecha.replace(' ', 'T')).getTime() : 0;
+      return dA - dB;
+    });
+
+    let updatedCount = 0;
+    sortedSalidas.forEach(s => {
+      const pu = Number(s.precioUnitario) || 0;
+      const cant = Number(s.cantidadBotellas) || 0;
+      const fifo = calculateFifoConsumption(s.articuloId, cant, pu, s.id);
+      s.costoTotalFifo = fifo.costoTotalFifo;
+      s.gananciaNominal = fifo.gananciaNominal;
+      s.lotesDetalle = fifo.lotesDetalle;
+      updatedCount++;
+    });
+
+    saveState();
+    renderAllViews();
+    if (notify) {
+      showToast(`Ganancias PEPS recalculadas exitosamente en ${updatedCount} ventas`, 'success');
+    }
+  };
 
   function getArticuloMetrics(articuloId) {
     const articulo = (state.articulos || []).find(a => String(a.id) === String(articuloId));
@@ -899,6 +945,7 @@
 
     // Ganancia Nominal Neta (PEPS)
     let totalGananciaNominal = 0;
+    let salesSinCosto = 0;
     (state.salidas || []).forEach(s => {
       let g = Number(s.gananciaNominal);
       if (s.gananciaNominal === undefined || s.gananciaNominal === null || isNaN(g)) {
@@ -911,6 +958,11 @@
         s.lotesDetalle = fifo.lotesDetalle;
       }
       totalGananciaNominal += g;
+
+      const totalVentaVal = (Number(s.precioUnitario) || 0) * (Number(s.cantidadBotellas) || 0);
+      if ((s.costoTotalFifo === 0 || s.costoTotalFifo === null) && totalVentaVal > 0) {
+        salesSinCosto++;
+      }
     });
 
     const pctGanancia = totalDineroVendido > 0 ? ((totalGananciaNominal / totalDineroVendido) * 100).toFixed(1) : '0.0';
@@ -919,7 +971,13 @@
     const elPctGanancia = document.getElementById('dash-pct-ganancia');
     if (elPctGanancia) elPctGanancia.textContent = `${pctGanancia}%`;
     const elGananciaSubtext = document.getElementById('dash-ganancia-subtext');
-    if (elGananciaSubtext) elGananciaSubtext.textContent = `Margen nominal sobre ventas`;
+    if (elGananciaSubtext) {
+      if (salesSinCosto > 0) {
+        elGananciaSubtext.innerHTML = `<span style="color:var(--gold-accent); font-weight:600;">⚠️ ${salesSinCosto} venta${salesSinCosto > 1 ? 's' : ''} sin costo en Entradas</span>`;
+      } else {
+        elGananciaSubtext.textContent = `Margen nominal sobre ventas`;
+      }
+    }
 
     // Render Client Membership Deliveries Table (Resumen de Membresías por Cliente)
     const tableClientMembBody = document.getElementById('tbody-dash-client-memberships');
@@ -1261,7 +1319,7 @@
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted">No hay compras (entradas) registradas que coincidan con los filtros</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="14" class="text-center text-muted">No hay compras (entradas) registradas que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -1293,6 +1351,10 @@
           <td>${formatCurrency(precioPublico)}</td>
           <td><strong class="text-gold">${formatCurrency(precioClub)}</strong></td>
           <td class="text-muted">${e.fecha}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="window.openEntradaModal('${e.id}')" title="Editar Compra / Costo"><i data-lucide="edit"></i></button>
+            <button class="btn btn-ghost btn-sm btn-icon text-rose" onclick="window.deleteEntrada('${e.id}')" title="Eliminar Compra"><i data-lucide="trash-2"></i></button>
+          </td>
         </tr>
       `;
     });
@@ -1461,6 +1523,25 @@
       const gananciaColor = gananciaVal >= 0 ? 'var(--emerald)' : 'var(--rose)';
       const gananciaSign = gananciaVal >= 0 ? '+' : '';
 
+      const isMissingCost = fifoInfo.costoTotalFifo === 0 && totalVenta > 0;
+      let gananciaTdContent = '';
+
+      if (isMissingCost) {
+        gananciaTdContent = `
+          <span class="badge badge-warning" style="font-size:0.75rem;" title="El costo de compra en Entradas no fue cargado o es $0. Editá la compra en ENTRADAS para corregir el costo.">
+            ⚠️ Sin costo de compra
+          </span>
+          <br><small class="text-muted" style="font-size:0.7rem;">(Calculado al 100% ganancia)</small>
+        `;
+      } else {
+        gananciaTdContent = `
+          <strong style="color:${gananciaColor}" title="${lotesStr || 'Costeo PEPS por lote'}">
+            ${gananciaSign}${formatCurrency(gananciaVal)}
+          </strong>
+          ${lotesStr ? `<br><small class="text-muted" style="font-size:0.7rem;">${lotesStr}</small>` : ''}
+        `;
+      }
+
       html += `
         <tr>
           <td class="text-muted"><strong>${s.fecha}</strong></td>
@@ -1470,12 +1551,7 @@
           <td><strong>${s.cantidadBotellas}</strong> bot.</td>
           <td>${unitPrice > 0 ? formatCurrency(unitPrice) : '-'}</td>
           <td><strong>${totalVenta > 0 ? formatCurrency(totalVenta) : '-'}</strong></td>
-          <td>
-            <strong style="color:${gananciaColor}" title="${lotesStr || 'Costeo PEPS por lote'}">
-              ${gananciaSign}${formatCurrency(gananciaVal)}
-            </strong>
-            ${lotesStr ? `<br><small class="text-muted" style="font-size:0.7rem;">${lotesStr}</small>` : ''}
-          </td>
+          <td>${gananciaTdContent}</td>
           <td>
             <button class="btn btn-ghost btn-sm btn-icon" onclick="window.deleteSalida('${s.id}')" title="Eliminar Venta"><i data-lucide="trash-2"></i></button>
           </td>
@@ -2273,11 +2349,121 @@
 
       logAuditoria('Entradas', 'Registro de Compra', `Compra #${nextNumeroCompra}: ${cantidadCajas} cajas (${unidadesSumadas} botellas) de ${art.bodega} ${art.etiqueta} a ${prov ? prov.nombre : 'Proveedor'}`);
 
+      recalculateAllSalidasFifo(false);
       saveState();
       closeModal();
       renderAllViews();
-      showToast(`Entrada registrada (#${nextNumeroCompra}). +${unidadesSumadas} botellas agregadas al stock!`, 'success');
+      showToast(`Entrada registrada (#${nextNumeroCompra}). +${unidadesSumadas} botellas agregadas al stock y ganancias PEPS actualizadas!`, 'success');
     });
+  };
+
+  window.openEntradaModal = function (entradaId) {
+    const eObj = (state.entradas || []).find(e => String(e.id) === String(entradaId));
+    if (!eObj) return;
+
+    const art = (state.articulos || []).find(a => String(a.id) === String(eObj.articuloId));
+    const prov = (state.proveedores || []).find(p => String(p.id) === String(eObj.proveedorId));
+
+    const html = `
+      <form id="form-edit-entrada">
+        <div class="form-group">
+          <label>Artículo / Vino</label>
+          <input type="text" class="form-control" value="${art ? art.bodega + ' - ' + art.etiqueta + ' (' + art.cepa + ')' : 'Vino'}" readonly style="opacity:0.8;">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Proveedor</label>
+            <input type="text" class="form-control" value="${prov ? prov.nombre : 'N/A'}" readonly style="opacity:0.8;">
+          </div>
+          <div class="form-group">
+            <label>N° Compra</label>
+            <input type="number" class="form-control" value="${eObj.numeroCompra}" readonly style="opacity:0.8;">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cantidad de Cajas *</label>
+            <input type="number" id="edit-ent-cajas" class="form-control" min="1" value="${eObj.cantidadCajas}" required>
+          </div>
+          <div class="form-group">
+            <label>Precio por Caja ($) *</label>
+            <input type="number" id="edit-ent-precio-caja" class="form-control" min="0" step="100" value="${eObj.precioCaja}" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Costo Adicional por Caja ($)</label>
+            <input type="number" id="edit-ent-costo-adic" class="form-control" min="0" step="100" value="${eObj.costoAdicionalCaja || 0}">
+          </div>
+          <div class="form-group">
+            <label>Fecha de Compra</label>
+            <input type="date" id="edit-ent-fecha" class="form-control" value="${(eObj.fecha || '').substring(0,10)}">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Precio Venta Sugerido - Público ($ / bot.)</label>
+            <input type="number" id="edit-ent-pv-publico" class="form-control" min="0" step="100" value="${eObj.precioVentaPublico || 0}">
+          </div>
+          <div class="form-group">
+            <label>Precio Venta Sugerido - BORRA CLUB ($ / bot.)</label>
+            <input type="number" id="edit-ent-pv-club" class="form-control" min="0" step="100" value="${eObj.precioVentaClub || 0}">
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="window.closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios y Recalcular PEPS</button>
+        </div>
+      </form>
+    `;
+
+    openModal(`Editar Compra / Costo #${eObj.numeroCompra}`, html);
+
+    document.getElementById('form-edit-entrada').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const cantCajas = parseInt(document.getElementById('edit-ent-cajas').value, 10) || 1;
+      const precioCaja = parseFloat(document.getElementById('edit-ent-precio-caja').value) || 0;
+      const costoAdic = parseFloat(document.getElementById('edit-ent-costo-adic').value) || 0;
+      const fecha = document.getElementById('edit-ent-fecha').value || eObj.fecha;
+      const pvPublico = parseFloat(document.getElementById('edit-ent-pv-publico').value) || 0;
+      const pvClub = parseFloat(document.getElementById('edit-ent-pv-club').value) || 0;
+
+      const uxb = art ? (Number(art.uxb) || 6) : 6;
+      eObj.cantidadCajas = cantCajas;
+      eObj.unidadesSumadas = cantCajas * uxb;
+      eObj.precioCaja = precioCaja;
+      eObj.costoAdicionalCaja = costoAdic;
+      eObj.fecha = fecha;
+      eObj.precioVentaPublico = pvPublico;
+      eObj.precioVentaClub = pvClub;
+
+      logAuditoria('Entradas', 'Edición de Compra', `Se actualizaron los costos y precios de Compra #${eObj.numeroCompra}`);
+
+      recalculateAllSalidasFifo(false);
+      saveState();
+      closeModal();
+      renderAllViews();
+      showToast(`Compra #${eObj.numeroCompra} actualizada. Costos y ganancias PEPS recalculados!`, 'success');
+    });
+  };
+
+  window.deleteEntrada = function (entradaId) {
+    const eObj = (state.entradas || []).find(e => String(e.id) === String(entradaId));
+    if (!eObj) return;
+
+    if (confirm(`¿Desea eliminar la Compra #${eObj.numeroCompra}? Esto recalculará las ganancias PEPS de las ventas.`)) {
+      state.entradas = state.entradas.filter(e => String(e.id) !== String(entradaId));
+      logAuditoria('Entradas', 'Eliminación de Compra', `Se eliminó la Compra #${eObj.numeroCompra}`);
+      recalculateAllSalidasFifo(false);
+      saveState();
+      renderAllViews();
+      showToast(`Compra #${eObj.numeroCompra} eliminada. Ganancias PEPS recalculadas.`, 'success');
+    }
   };
 
   // 6. SALIDAS FORM (CON DESPLEGABLE ORDENADO ALFABÉTICAMENTE POR BODEGA Y ETIQUETA)
