@@ -148,6 +148,7 @@ def init_postgres_tables_if_needed():
         ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS fecha VARCHAR(20);
         ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS precio_venta_publico DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS precio_venta_club DOUBLE PRECISION DEFAULT 0;
+        ALTER TABLE Entradas ADD COLUMN IF NOT EXISTS unidad_entrada VARCHAR(50) DEFAULT 'CAJA';
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS fecha VARCHAR(50);
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS detalle VARCHAR(255);
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS precio_unitario DOUBLE PRECISION DEFAULT 0;
@@ -400,13 +401,14 @@ def get_full_state():
         } for r in cursor.fetchall()]
 
         # Entradas
-        db_execute(cursor, "SELECT id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha, precio_venta_publico, precio_venta_club FROM Entradas")
+        db_execute(cursor, "SELECT id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha, precio_venta_publico, precio_venta_club, unidad_entrada FROM Entradas")
         entradas = [{
             "id": str(r[0]), "numeroCompra": int(r[1]), "articuloId": str(r[2]), "cepa": str(r[3] or ''),
             "proveedorId": str(r[4]), "cantidadCajas": int(r[5]), "unidadesSumadas": int(r[6]),
             "precioCaja": float(r[7] or 0), "costoAdicionalCaja": float(r[8] or 0) if len(r) > 8 else 0, "fecha": str(r[9] or '') if len(r) > 9 else '',
             "precioVentaPublico": float(r[10] or 0) if len(r) > 10 else 0,
-            "precioVentaClub": float(r[11] or 0) if len(r) > 11 else 0
+            "precioVentaClub": float(r[11] or 0) if len(r) > 11 else 0,
+            "unidadEntrada": str(r[12] or 'CAJA') if len(r) > 12 else 'CAJA'
         } for r in cursor.fetchall()]
 
         # Salidas
@@ -592,11 +594,12 @@ def sync_full_state():
             safe_float(e.get('costoAdicionalCaja'), 0.0),
             safe_str(e.get('fecha', ''), 20),
             safe_float(e.get('precioVentaPublico'), 0.0),
-            safe_float(e.get('precioVentaClub'), 0.0)
+            safe_float(e.get('precioVentaClub'), 0.0),
+            safe_str(e.get('unidadEntrada', 'CAJA'), 50)
         ) for e in data.get('entradas', []) if e.get('id') and safe_str(e.get('articuloId')) in valid_art_ids and safe_str(e.get('proveedorId')) in valid_prov_ids]
         ent_rows = deduplicate_rows_by_id(ent_rows)
         if ent_rows:
-            db_executemany(cursor, "INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha, precio_venta_publico, precio_venta_club) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
+            db_executemany(cursor, "INSERT INTO Entradas (id, numero_compra, articulo_id, cepa, proveedor_id, cantidad_cajas, unidades_sumadas, precio_caja, costo_adicional, fecha, precio_venta_publico, precio_venta_club, unidad_entrada) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ent_rows)
 
         # 6. Salidas Bulk Insert
         sal_rows = [(

@@ -563,10 +563,11 @@
       .sort((a, b) => (Number(a.numeroCompra) || 0) - (Number(b.numeroCompra) || 0));
 
     const batches = entradas.map(e => {
-      const uComp = Number(e.unidadesSumadas) || ((Number(e.cantidadCajas) || 0) * uxb);
+      const isBotella = e.unidadEntrada === 'BOTELLA';
+      const uComp = Number(e.unidadesSumadas) || (isBotella ? (Number(e.cantidadCajas) || 1) : ((Number(e.cantidadCajas) || 0) * uxb));
       const pCaja = Number(e.precioCaja) || 0;
       const cAdic = Number(e.costoAdicionalCaja) || 0;
-      const costoUnitario = (pCaja + cAdic) / uxb;
+      const costoUnitario = isBotella ? (pCaja + cAdic) : ((pCaja + cAdic) / uxb);
 
       return {
         id: e.id,
@@ -609,7 +610,8 @@
       .filter(e => String(e.articuloId) === String(articuloId))
       .map(e => {
         const uxb = articulo ? (Number(articulo.uxb) || 6) : 6;
-        return (Number(e.precioCaja || 0) + Number(e.costoAdicionalCaja || 0)) / uxb;
+        const isBotella = e.unidadEntrada === 'BOTELLA';
+        return isBotella ? (Number(e.precioCaja || 0) + Number(e.costoAdicionalCaja || 0)) : ((Number(e.precioCaja || 0) + Number(e.costoAdicionalCaja || 0)) / uxb);
       })
       .filter(c => c > 0);
     const nonZeroFallbackCost = validEntradaCosts.length > 0 ? validEntradaCosts[validEntradaCosts.length - 1] : 0;
@@ -644,8 +646,9 @@
         .filter(e => String(e.articuloId) === String(articuloId))
         .sort((a, b) => (Number(b.numeroCompra) || 0) - (Number(a.numeroCompra) || 0))[0];
       const uxb = articulo ? (Number(articulo.uxb) || 6) : 6;
+      const isBotella = lastEntrada ? lastEntrada.unidadEntrada === 'BOTELLA' : false;
       let fallbackCost = lastEntrada
-        ? (Number(lastEntrada.precioCaja || 0) + Number(lastEntrada.costoAdicionalCaja || 0)) / uxb
+        ? (isBotella ? (Number(lastEntrada.precioCaja || 0) + Number(lastEntrada.costoAdicionalCaja || 0)) : ((Number(lastEntrada.precioCaja || 0) + Number(lastEntrada.costoAdicionalCaja || 0)) / uxb))
         : 0;
       if (fallbackCost === 0 && nonZeroFallbackCost > 0) {
         fallbackCost = nonZeroFallbackCost;
@@ -723,8 +726,9 @@
     const ultimoPrecioCaja = lastEntrada ? Number(lastEntrada.precioCaja) || 0 : 0;
     const ultimoCostoAdicCaja = lastEntrada ? Number(lastEntrada.costoAdicionalCaja) || 0 : 0;
     const uxb = Number(articulo.uxb) || 1;
+    const isBotella = lastEntrada ? lastEntrada.unidadEntrada === 'BOTELLA' : false;
 
-    const ultimoCostoUnitario = (ultimoPrecioCaja + ultimoCostoAdicCaja) / uxb;
+    const ultimoCostoUnitario = isBotella ? (ultimoPrecioCaja + ultimoCostoAdicCaja) : ((ultimoPrecioCaja + ultimoCostoAdicCaja) / uxb);
 
     const batches = getArticuloFifoBatches(articuloId);
     const valorInventarioFifo = batches.reduce((sum, b) => sum + (b.disponible * b.costoUnitarioBotella), 0);
@@ -1425,13 +1429,20 @@
       const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
       const prov = state.proveedores.find(p => String(p.id) === String(e.proveedorId));
       
+      const isBotella = e.unidadEntrada === 'BOTELLA';
       const precioCaja = Number(e.precioCaja) || 0;
       const costoAdicCaja = Number(e.costoAdicionalCaja) || 0;
       const uxb = art ? (Number(art.uxb) || 1) : 1;
-      const costoUnitarioBotella = (precioCaja + costoAdicCaja) / uxb;
-      const totalCompra = Number(e.cantidadCajas) * (precioCaja + costoAdicCaja);
+
+      const costoUnitarioBotella = isBotella ? (precioCaja + costoAdicCaja) : ((precioCaja + costoAdicCaja) / uxb);
+      const totalCompra = isBotella ? (Number(e.unidadesSumadas) * (precioCaja + costoAdicCaja)) : (Number(e.cantidadCajas) * (precioCaja + costoAdicCaja));
+
       const precioPublico = Number(e.precioVentaPublico) || 0;
       const precioClub = Number(e.precioVentaClub) || 0;
+
+      const cajasDisplay = isBotella ? `<span class="badge badge-warning" title="Entrada realizada por botellas sueltas">${e.unidadesSumadas} bot. sueltas</span>` : `${e.cantidadCajas} cj.`;
+      const precioCajaDisplay = isBotella ? `${formatCurrency(precioCaja)} <small class="text-muted">/bot.</small>` : `${formatCurrency(precioCaja)} <small class="text-muted">/cj.</small>`;
+      const costoAdicDisplay = isBotella ? `+${formatCurrency(costoAdicCaja)} <small class="text-muted">/bot.</small>` : `+${formatCurrency(costoAdicCaja)} <small class="text-muted">/cj.</small>`;
 
       html += `
         <tr>
@@ -1439,10 +1450,10 @@
           <td><strong>${art ? art.bodega + ' - ' + art.etiqueta : 'N/A'}</strong></td>
           <td>${e.cepa || (art ? art.cepa : '-')}</td>
           <td>${prov ? prov.nombre : 'N/A'}</td>
-          <td>${e.cantidadCajas} cj.</td>
+          <td>${cajasDisplay}</td>
           <td><strong>+${e.unidadesSumadas}</strong> bot.</td>
-          <td>${formatCurrency(precioCaja)}</td>
-          <td class="text-gold">+${formatCurrency(costoAdicCaja)}</td>
+          <td>${precioCajaDisplay}</td>
+          <td class="text-gold">${costoAdicDisplay}</td>
           <td><strong class="text-gold">${formatCurrency(costoUnitarioBotella)}</strong></td>
           <td><strong class="text-gold">${formatCurrency(totalCompra)}</strong></td>
           <td>${formatCurrency(precioPublico)}</td>
@@ -2281,7 +2292,7 @@
     }
   };
 
-  // 5. ENTRADAS FORM (CON DESPLEGABLE ORDENADO ALFABÉTICAMENTE)
+  // 5. ENTRADAS FORM (CON DESPLEGABLE ORDENADO ALFABÉTICAMENTE Y BOTELLAS SUELTAS)
   window.openEntradaForm = function () {
     if (state.articulos.length === 0) {
       showToast('Primero debe crear al menos un artículo', 'error');
@@ -2310,6 +2321,13 @@
             <input type="date" id="ent-fecha" class="form-control" value="${todayStr}" required>
           </div>
         </div>
+        <div class="form-group">
+          <label>Unidad de Entrada (Formato de Compra) *</label>
+          <select id="ent-unidad-entrada" class="form-control" style="font-weight:600; color:var(--purple);">
+            <option value="CAJA" selected>📦 Cajas (Entrada por bulto/caja)</option>
+            <option value="BOTELLA">🍷 Botellas sueltas</option>
+          </select>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label>Artículo (Vino) * <small class="text-muted">(Ordenados por Bodega y Etiqueta)</small></label>
@@ -2331,27 +2349,27 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Cantidad de Cajas *</label>
-            <input type="number" id="ent-cajas" class="form-control" min="1" value="1" required>
+            <label id="lbl-ent-cajas">Cantidad de Cajas *</label>
+            <input type="number" id="ent-cajas" class="form-control" min="1" value="1" required placeholder="Ej: 1">
           </div>
           <div class="form-group">
-            <label>Unidades Sumadas (Cajas x UxB)</label>
+            <label>Unidades Sumadas (al Stock)</label>
             <input type="text" id="ent-unidades-calc" class="form-control" readonly value="0 botellas">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Precio por Caja ($) *</label>
+            <label id="lbl-ent-precio-caja">Precio por Caja ($) *</label>
             <input type="number" id="ent-precio-caja" class="form-control" min="0" step="100" value="12000" required placeholder="Ej: 12000">
           </div>
           <div class="form-group">
-            <label>Costo Adicional por Caja ($) <small class="text-muted">(Flete/Envío/Impuesto por caja)</small></label>
-            <input type="number" id="ent-costo-adic" class="form-control" min="0" step="50" value="600" placeholder="Ej: 600">
+            <label id="lbl-ent-costo-adic">Costo Adicional por Caja ($) <small class="text-muted">(Flete/Envío)</small></label>
+            <input type="number" id="ent-costo-adic" class="form-control" min="0" step="50" value="0" placeholder="Ej: 600">
           </div>
         </div>
         <div class="form-group">
-          <label>Costo Resultante por Botella [(Precio Caja + Costo Adic.) / UxB]</label>
-          <input type="text" id="ent-costo-botella-calc" class="form-control" readonly value="$0.00" style="font-weight:bold; font-size:1.05rem">
+          <label id="lbl-ent-costo-botella">Costo Resultante por Botella [(Precio Caja + Costo Adic.) / UxB]</label>
+          <input type="text" id="ent-costo-botella-calc" class="form-control" readonly value="$0.00" style="font-weight:bold; font-size:1.05rem; color:var(--emerald);">
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -2372,6 +2390,7 @@
 
     openModal('Nueva Entrada / Compra de Vino', html);
 
+    const unidadSelect = document.getElementById('ent-unidad-entrada');
     const artSelect = document.getElementById('ent-articulo');
     const cepaInput = document.getElementById('ent-cepa');
     const provSelect = document.getElementById('ent-proveedor');
@@ -2383,7 +2402,18 @@
     const precioPublicoInput = document.getElementById('ent-precio-publico');
     const precioClubInput = document.getElementById('ent-precio-club');
 
+    const lblCajas = document.getElementById('lbl-ent-cajas');
+    const lblPrecioCaja = document.getElementById('lbl-ent-precio-caja');
+    const lblCostoAdic = document.getElementById('lbl-ent-costo-adic');
+    const lblCostoBotella = document.getElementById('lbl-ent-costo-botella');
+
     function updateArtInfo() {
+      const isBotella = unidadSelect.value === 'BOTELLA';
+      lblCajas.textContent = isBotella ? 'Cantidad de Botellas *' : 'Cantidad de Cajas *';
+      lblPrecioCaja.textContent = isBotella ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *';
+      lblCostoAdic.innerHTML = isBotella ? 'Costo Adicional por Botella ($) <small class="text-muted">(Flete/Envío por botella)</small>' : 'Costo Adicional por Caja ($) <small class="text-muted">(Flete/Envío por caja)</small>';
+      lblCostoBotella.textContent = isBotella ? 'Costo Resultante por Botella (Precio + Costo Adic.)' : 'Costo Resultante por Botella [(Precio Caja + Costo Adic.) / UxB]';
+
       const artId = artSelect.value;
       const art = state.articulos.find(a => String(a.id) === String(artId));
 
@@ -2399,14 +2429,17 @@
           provSelect.disabled = true;
         }
 
-        const cajas = Number(cajasInput.value) || 0;
+        const cantVal = Number(cajasInput.value) || 0;
         const uxb = Number(art.uxb) || 1;
-        unCalcInput.value = `${cajas * uxb} botellas (${uxb} uxb)`;
+        const unidadesSumadas = isBotella ? cantVal : (cantVal * uxb);
+        unCalcInput.value = isBotella ? `${unidadesSumadas} botellas sueltas` : `${unidadesSumadas} botellas (${cantVal} cj. de ${uxb} uxb)`;
 
-        const precioCaja = Number(precioInput.value) || 0;
-        const adicCaja = Number(adicInput.value) || 0;
-        const unitCost = (precioCaja + adicCaja) / uxb;
-        unitCalcInput.value = `${formatCurrency(unitCost)} / botella`;
+        const precioVal = Number(precioInput.value) || 0;
+        const adicVal = Number(adicInput.value) || 0;
+        const unitCost = isBotella ? (precioVal + adicVal) : ((precioVal + adicVal) / uxb);
+        const totalCompra = isBotella ? (unidadesSumadas * unitCost) : (cantVal * (precioVal + adicVal));
+
+        unitCalcInput.value = `${formatCurrency(unitCost)} / botella (Total compra: ${formatCurrency(totalCompra)})`;
 
       } else {
         cepaInput.value = '';
@@ -2417,6 +2450,7 @@
       }
     }
 
+    unidadSelect.addEventListener('change', updateArtInfo);
     artSelect.addEventListener('change', updateArtInfo);
     cajasInput.addEventListener('input', updateArtInfo);
     precioInput.addEventListener('input', updateArtInfo);
@@ -2424,9 +2458,11 @@
 
     document.getElementById('form-entrada').addEventListener('submit', (e) => {
       e.preventDefault();
+      const unidadEntrada = unidadSelect.value;
+      const isBotella = unidadEntrada === 'BOTELLA';
       const articuloId = artSelect.value;
       const proveedorId = provSelect.value;
-      const cantidadCajas = parseInt(cajasInput.value, 10) || 0;
+      const cantVal = parseInt(cajasInput.value, 10) || 0;
       const precioCaja = parseFloat(precioInput.value) || 0;
       const costoAdicionalCaja = parseFloat(adicInput.value) || 0;
       const precioVentaPublico = parseFloat(precioPublicoInput.value) || 0;
@@ -2447,7 +2483,8 @@
       }
 
       const uxb = Number(art.uxb) || 1;
-      const unidadesSumadas = cantidadCajas * uxb;
+      const cantidadCajas = isBotella ? Math.floor(cantVal / uxb) : cantVal;
+      const unidadesSumadas = isBotella ? cantVal : (cantVal * uxb);
 
       state.entradas.push({
         id: generateUniqueId('ent'),
@@ -2455,6 +2492,7 @@
         articuloId,
         cepa: art.cepa,
         proveedorId,
+        unidadEntrada,
         cantidadCajas,
         unidadesSumadas,
         precioCaja,
@@ -2464,7 +2502,8 @@
         fecha
       });
 
-      logAuditoria('Entradas', 'Registro de Compra', `Compra #${nextNumeroCompra}: ${cantidadCajas} cajas (${unidadesSumadas} botellas) de ${art.bodega} ${art.etiqueta} a ${prov ? prov.nombre : 'Proveedor'}`);
+      const formatoStr = isBotella ? `${unidadesSumadas} botellas sueltas` : `${cantidadCajas} cajas (${unidadesSumadas} botellas)`;
+      logAuditoria('Entradas', 'Registro de Compra', `Compra #${nextNumeroCompra}: ${formatoStr} de ${art.bodega} ${art.etiqueta} a ${prov ? prov.nombre : 'Proveedor'}`);
 
       recalculateAllSalidasFifo(false);
       saveState();
@@ -2480,6 +2519,9 @@
 
     const art = (state.articulos || []).find(a => String(a.id) === String(eObj.articuloId));
     const prov = (state.proveedores || []).find(p => String(p.id) === String(eObj.proveedorId));
+
+    const isBot = eObj.unidadEntrada === 'BOTELLA';
+    const initCant = isBot ? eObj.unidadesSumadas : eObj.cantidadCajas;
 
     const html = `
       <form id="form-edit-entrada">
@@ -2499,20 +2541,28 @@
           </div>
         </div>
 
+        <div class="form-group">
+          <label>Unidad de Entrada *</label>
+          <select id="edit-ent-unidad" class="form-control" style="font-weight:600;">
+            <option value="CAJA" ${!isBot ? 'selected' : ''}>📦 Cajas (Entrada por bulto/caja)</option>
+            <option value="BOTELLA" ${isBot ? 'selected' : ''}>🍷 Botellas sueltas</option>
+          </select>
+        </div>
+
         <div class="form-row">
           <div class="form-group">
-            <label>Cantidad de Cajas *</label>
-            <input type="number" id="edit-ent-cajas" class="form-control" min="1" value="${eObj.cantidadCajas}" required>
+            <label id="lbl-edit-cajas">${isBot ? 'Cantidad de Botellas *' : 'Cantidad de Cajas *'}</label>
+            <input type="number" id="edit-ent-cajas" class="form-control" min="1" value="${initCant}" required>
           </div>
           <div class="form-group">
-            <label>Precio por Caja ($) *</label>
+            <label id="lbl-edit-precio">${isBot ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *'}</label>
             <input type="number" id="edit-ent-precio-caja" class="form-control" min="0" step="100" value="${eObj.precioCaja}" required>
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label>Costo Adicional por Caja ($)</label>
+            <label id="lbl-edit-adic">${isBot ? 'Costo Adicional por Botella ($)' : 'Costo Adicional por Caja ($)'}</label>
             <input type="number" id="edit-ent-costo-adic" class="form-control" min="0" step="100" value="${eObj.costoAdicionalCaja || 0}">
           </div>
           <div class="form-group">
@@ -2541,9 +2591,23 @@
 
     openModal(`Editar Compra / Costo #${eObj.numeroCompra}`, html);
 
+    const selEditUnidad = document.getElementById('edit-ent-unidad');
+    const lblEditCajas = document.getElementById('lbl-edit-cajas');
+    const lblEditPrecio = document.getElementById('lbl-edit-precio');
+    const lblEditAdic = document.getElementById('lbl-edit-adic');
+
+    selEditUnidad.addEventListener('change', () => {
+      const isB = selEditUnidad.value === 'BOTELLA';
+      lblEditCajas.textContent = isB ? 'Cantidad de Botellas *' : 'Cantidad de Cajas *';
+      lblEditPrecio.textContent = isB ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *';
+      lblEditAdic.textContent = isB ? 'Costo Adicional por Botella ($)' : 'Costo Adicional por Caja ($)';
+    });
+
     document.getElementById('form-edit-entrada').addEventListener('submit', (e) => {
       e.preventDefault();
-      const cantCajas = parseInt(document.getElementById('edit-ent-cajas').value, 10) || 1;
+      const unidadEntrada = selEditUnidad.value;
+      const isB = unidadEntrada === 'BOTELLA';
+      const cantVal = parseInt(document.getElementById('edit-ent-cajas').value, 10) || 1;
       const precioCaja = parseFloat(document.getElementById('edit-ent-precio-caja').value) || 0;
       const costoAdic = parseFloat(document.getElementById('edit-ent-costo-adic').value) || 0;
       const fecha = document.getElementById('edit-ent-fecha').value || eObj.fecha;
@@ -2551,8 +2615,9 @@
       const pvClub = parseFloat(document.getElementById('edit-ent-pv-club').value) || 0;
 
       const uxb = art ? (Number(art.uxb) || 6) : 6;
-      eObj.cantidadCajas = cantCajas;
-      eObj.unidadesSumadas = cantCajas * uxb;
+      eObj.unidadEntrada = unidadEntrada;
+      eObj.cantidadCajas = isB ? Math.floor(cantVal / uxb) : cantVal;
+      eObj.unidadesSumadas = isB ? cantVal : (cantVal * uxb);
       eObj.precioCaja = precioCaja;
       eObj.costoAdicionalCaja = costoAdic;
       eObj.fecha = fecha;
@@ -3717,7 +3782,7 @@
       });
     } else if (moduleName === 'entradas') {
       title = 'Reporte de Compras (Entradas de Stock)';
-      headers = ['N° Compra', 'Artículo / Vino', 'Cepa', 'Proveedor', 'Cajas', 'Unidades', 'Precio Caja ($)', 'Costo Adic. Caja ($)', 'Costo Unit. Botella ($)', 'Total Compra ($)', 'Precio Público ($)', 'Precio BORRA CLUB ($)', 'Fecha'];
+      headers = ['N° Compra', 'Artículo / Vino', 'Cepa', 'Proveedor', 'Formato / Cajas', 'Unidades', 'Precio Caja/Bot. ($)', 'Costo Adic. ($)', 'Costo Unit. Botella ($)', 'Total Compra ($)', 'Precio Público ($)', 'Precio BORRA CLUB ($)', 'Fecha'];
       const searchVal = (document.getElementById('search-entradas').value || '').toLowerCase();
       const provFilter = document.getElementById('filter-entradas-proveedor') ? document.getElementById('filter-entradas-proveedor').value : '';
       const desdeFilter = document.getElementById('filter-entradas-desde') ? document.getElementById('filter-entradas-desde').value : '';
@@ -3746,20 +3811,21 @@
       rows = list.map(e => {
         const art = state.articulos.find(a => String(a.id) === String(e.articuloId));
         const prov = state.proveedores.find(p => String(p.id) === String(e.proveedorId));
+        const isBotella = e.unidadEntrada === 'BOTELLA';
         const precioCaja = Number(e.precioCaja) || 0;
         const costoAdicCaja = Number(e.costoAdicionalCaja) || 0;
         const uxb = art ? (Number(art.uxb) || 1) : 1;
-        const costoUnitarioBotella = (precioCaja + costoAdicCaja) / uxb;
-        const totalCompra = Number(e.cantidadCajas) * (precioCaja + costoAdicCaja);
+        const costoUnitarioBotella = isBotella ? (precioCaja + costoAdicCaja) : ((precioCaja + costoAdicCaja) / uxb);
+        const totalCompra = isBotella ? (Number(e.unidadesSumadas) * (precioCaja + costoAdicCaja)) : (Number(e.cantidadCajas) * (precioCaja + costoAdicCaja));
         return [
           `#${e.numeroCompra}`,
           art ? `${art.bodega} - ${art.etiqueta}` : 'N/A',
           e.cepa || (art ? art.cepa : '-'),
           prov ? prov.nombre : 'N/A',
-          `${e.cantidadCajas} cj.`,
+          isBotella ? `${e.unidadesSumadas} bot. sueltas` : `${e.cantidadCajas} cj.`,
           `+${e.unidadesSumadas} bot.`,
-          formatCurrency(precioCaja),
-          formatCurrency(costoAdicCaja),
+          `${formatCurrency(precioCaja)} ${isBotella ? '/bot.' : '/cj.'}`,
+          `${formatCurrency(costoAdicCaja)} ${isBotella ? '/bot.' : '/cj.'}`,
           formatCurrency(costoUnitarioBotella),
           formatCurrency(totalCompra),
           formatCurrency(e.precioVentaPublico || 0),

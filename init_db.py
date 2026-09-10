@@ -114,6 +114,9 @@ def init_sql_server():
     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Entradas') AND name = 'costo_adicional')
     ALTER TABLE Entradas ADD costo_adicional FLOAT NOT NULL DEFAULT 0;
 
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Entradas') AND name = 'unidad_entrada')
+    ALTER TABLE Entradas ADD unidad_entrada NVARCHAR(50) NOT NULL DEFAULT 'CAJA';
+
     IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Salidas')
     CREATE TABLE Salidas (
         id NVARCHAR(100) PRIMARY KEY,
