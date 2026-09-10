@@ -2029,7 +2029,7 @@
 
         <div class="form-group">
           <label>Precio Fijo de la Membresía ($) *</label>
-          <input type="number" id="memb-precio" class="form-control" min="0" step="100" value="${isEdit ? (memb.precio || 0) : 25000}" required placeholder="Ej: 25000" style="font-weight:bold; font-size:1.1rem; color:var(--gold-accent);">
+          <input type="number" id="memb-precio" class="form-control" min="0" step="any" value="${isEdit ? (memb.precio || 0) : 25000}" required placeholder="Ej: 25000" style="font-weight:bold; font-size:1.1rem; color:var(--gold-accent);">
         </div>
 
         <div class="modal-actions">
@@ -2360,11 +2360,11 @@
         <div class="form-row">
           <div class="form-group">
             <label id="lbl-ent-precio-caja">Precio por Caja ($) *</label>
-            <input type="number" id="ent-precio-caja" class="form-control" min="0" step="100" value="12000" required placeholder="Ej: 12000">
+            <input type="number" id="ent-precio-caja" class="form-control" min="0" step="any" value="12000" required placeholder="Ej: 12000">
           </div>
           <div class="form-group">
             <label id="lbl-ent-costo-adic">Costo Adicional por Caja ($) <small class="text-muted">(Flete/Envío)</small></label>
-            <input type="number" id="ent-costo-adic" class="form-control" min="0" step="50" value="0" placeholder="Ej: 600">
+            <input type="number" id="ent-costo-adic" class="form-control" min="0" step="any" value="0" placeholder="Ej: 600">
           </div>
         </div>
         <div class="form-group">
@@ -2374,11 +2374,11 @@
         <div class="form-row">
           <div class="form-group">
             <label>Precio Venta Público General ($ / botella) *</label>
-            <input type="number" id="ent-precio-publico" class="form-control" min="0" step="100" value="0" placeholder="Ej: 8500">
+            <input type="number" id="ent-precio-publico" class="form-control" min="0" step="any" value="0" placeholder="Ej: 8500">
           </div>
           <div class="form-group">
             <label>Precio Venta BORRA CLUB ($ / botella) *</label>
-            <input type="number" id="ent-precio-club" class="form-control" min="0" step="100" value="0" placeholder="Ej: 6500">
+            <input type="number" id="ent-precio-club" class="form-control" min="0" step="any" value="0" placeholder="Ej: 6500">
           </div>
         </div>
         <div class="modal-actions">
@@ -2556,14 +2556,14 @@
           </div>
           <div class="form-group">
             <label id="lbl-edit-precio">${isBot ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *'}</label>
-            <input type="number" id="edit-ent-precio-caja" class="form-control" min="0" step="100" value="${eObj.precioCaja}" required>
+            <input type="number" id="edit-ent-precio-caja" class="form-control" min="0" step="any" value="${eObj.precioCaja}" required>
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label id="lbl-edit-adic">${isBot ? 'Costo Adicional por Botella ($)' : 'Costo Adicional por Caja ($)'}</label>
-            <input type="number" id="edit-ent-costo-adic" class="form-control" min="0" step="100" value="${eObj.costoAdicionalCaja || 0}">
+            <input type="number" id="edit-ent-costo-adic" class="form-control" min="0" step="any" value="${eObj.costoAdicionalCaja || 0}">
           </div>
           <div class="form-group">
             <label>Fecha de Compra</label>
@@ -2574,11 +2574,11 @@
         <div class="form-row">
           <div class="form-group">
             <label>Precio Venta Sugerido - Público ($ / bot.)</label>
-            <input type="number" id="edit-ent-pv-publico" class="form-control" min="0" step="100" value="${eObj.precioVentaPublico || 0}">
+            <input type="number" id="edit-ent-pv-publico" class="form-control" min="0" step="any" value="${eObj.precioVentaPublico || 0}">
           </div>
           <div class="form-group">
             <label>Precio Venta Sugerido - BORRA CLUB ($ / bot.)</label>
-            <input type="number" id="edit-ent-pv-club" class="form-control" min="0" step="100" value="${eObj.precioVentaClub || 0}">
+            <input type="number" id="edit-ent-pv-club" class="form-control" min="0" step="any" value="${eObj.precioVentaClub || 0}">
           </div>
         </div>
 
@@ -2718,7 +2718,7 @@
           <div class="form-row">
             <div class="form-group">
               <label>Precio Unitario de Venta ($ / botella) * <span id="sal-price-tag" class="badge badge-info" style="font-size:0.75rem; margin-left:0.3rem">Sugerido</span></label>
-              <input type="number" id="sal-precio-unitario" class="form-control" min="0" step="100" value="0">
+              <input type="number" id="sal-precio-unitario" class="form-control" min="0" step="any" value="0">
               <div id="sal-price-options" style="display:flex; gap:0.5rem; margin-top:0.4rem; font-size:0.8rem"></div>
             </div>
             <div class="form-group">
