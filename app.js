@@ -328,16 +328,59 @@
 
   let lastDbErrorMessage = '';
 
+  function prorateHistoricalMembershipPrices() {
+    if (!state.salidas || state.salidas.length === 0) return false;
+
+    const groupTotalBottles = new Map();
+    const groupMembresias = new Map();
+
+    state.salidas.forEach(s => {
+      if (s.tipoVenta === 'MEMBRESIA') {
+        const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+        const cant = Number(s.cantidadBotellas) || 0;
+        groupTotalBottles.set(transKey, (groupTotalBottles.get(transKey) || 0) + cant);
+        if (s.membresiaId) {
+          groupMembresias.set(transKey, s.membresiaId);
+        }
+      }
+    });
+
+    let modified = false;
+
+    state.salidas.forEach(s => {
+      if (s.tipoVenta === 'MEMBRESIA' && (s.precioUnitario === undefined || s.precioUnitario === null || Number(s.precioUnitario) === 0)) {
+        const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+        const membId = s.membresiaId || groupMembresias.get(transKey);
+        const memb = (state.membresias || []).find(m => String(m.id) === String(membId));
+
+        if (memb) {
+          const precioMemb = Number(memb.precio) || 0;
+          let totBotellas = groupTotalBottles.get(transKey) || 0;
+          if (totBotellas <= 0) {
+            const calc = getMembresiaCalculations(memb);
+            totBotellas = calc.totalBotellas || 1;
+          }
+          if (precioMemb > 0 && totBotellas > 0) {
+            s.precioUnitario = precioMemb / totBotellas;
+            modified = true;
+          }
+        }
+      }
+    });
+
+    return modified;
+  }
+
   function backfillFifoSalidasHistorical() {
     if (!state.salidas || state.salidas.length === 0) return false;
+
+    let modified = prorateHistoricalMembershipPrices();
 
     const sortedSalidas = [...state.salidas].sort((a, b) => {
       const dA = a.fecha ? new Date(a.fecha.replace(' ', 'T')).getTime() : 0;
       const dB = b.fecha ? new Date(b.fecha.replace(' ', 'T')).getTime() : 0;
       return dA - dB;
     });
-
-    let modified = false;
 
     sortedSalidas.forEach(s => {
       const needsBackfill = s.gananciaNominal === undefined ||
@@ -346,7 +389,8 @@
                             s.costoTotalFifo === null ||
                             !s.lotesDetalle ||
                             (Array.isArray(s.lotesDetalle) && s.lotesDetalle.length === 0) ||
-                            s.lotesDetalle === '[]' || s.lotesDetalle === '';
+                            s.lotesDetalle === '[]' || s.lotesDetalle === '' ||
+                            (s.tipoVenta === 'MEMBRESIA' && (s.precioUnitario === undefined || Number(s.precioUnitario) === 0));
 
       if (needsBackfill) {
         const pu = Number(s.precioUnitario) || 0;
@@ -631,6 +675,8 @@
       if (notify) showToast('No hay ventas para recalar', 'info');
       return;
     }
+
+    prorateHistoricalMembershipPrices();
 
     const sortedSalidas = [...state.salidas].sort((a, b) => {
       const dA = a.fecha ? new Date(a.fecha.replace(' ', 'T')).getTime() : 0;
