@@ -3333,7 +3333,7 @@
     e.target.value = '';
   });
 
-  // 4. CSV Import Entradas / Compras
+  // 4. CSV Import Entradas / Compras (Transaccional con Validación Estricta)
   document.getElementById('csv-entradas-file').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -3341,10 +3341,20 @@
     readCsvFileSmart(file, (content) => {
       try {
         const rows = smartParseCSV(content);
-        let count = 0;
+        if (rows.length === 0) {
+          showToast('El archivo CSV está vacío o no tiene registros válidos.', 'error');
+          return;
+        }
 
-        rows.forEach(r => {
+        const pendingEntries = [];
+        let lastNum = state.entradas.reduce((max, ent) => Math.max(max, Number(ent.numeroCompra) || 0), 0);
+
+        // FASE 1: VALIDACIÓN TRANSACCIONAL DE TODAS LAS FILAS
+        for (let idx = 0; idx < rows.length; idx++) {
+          const r = rows[idx];
+          const lineNum = idx + 2; // Considerando fila de encabezado
           const raw = r._raw || [];
+
           let bodega = r.bodega || '';
           let etiqueta = r.etiqueta || '';
           let cepaCsv = r.cepa || '';
@@ -3357,7 +3367,6 @@
           let precioVentaClub = parseFloat(r.precioventaclub || r.precioclub || r.precioborraclub || '0') || 0;
 
           if (raw.length >= 10) {
-            // 10-column format: bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha;precioVentaPublico;precioVentaClub
             bodega = bodega || raw[0] || '';
             etiqueta = etiqueta || raw[1] || '';
             cepaCsv = cepaCsv || raw[2] || '';
@@ -3369,7 +3378,6 @@
             precioVentaPublico = parseFloat(r.precioventapublico || r.preciopublico || raw[8] || '0') || 0;
             precioVentaClub = parseFloat(r.precioventaclub || r.precioclub || r.precioborraclub || raw[9] || '0') || 0;
           } else if (raw.length === 8 || raw.length === 9) {
-            // 8/9-column format: bodega;etiqueta;cepa;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha;[precioVentaPublico]
             bodega = bodega || raw[0] || '';
             etiqueta = etiqueta || raw[1] || '';
             cepaCsv = cepaCsv || raw[2] || '';
@@ -3382,7 +3390,6 @@
               precioVentaPublico = parseFloat(r.precioventapublico || r.preciopublico || raw[8] || '0') || 0;
             }
           } else if (raw.length === 7) {
-            // Legacy 7-column format: bodega;etiqueta;nombreProveedor;cantidadCajas;precioCaja;costoAdicionalCaja;fecha
             bodega = bodega || raw[0] || '';
             etiqueta = etiqueta || raw[1] || '';
             provNombre = provNombre || raw[2] || '';
@@ -3391,7 +3398,6 @@
             costoAdicCaja = parseFloat(r.costoadicionalcaja || r.costoadicional || raw[5] || '0') || 0;
             fecha = fecha || raw[6] || new Date().toISOString().split('T')[0];
           } else {
-            // Header / named fallback
             bodega = bodega || raw[0] || '';
             etiqueta = etiqueta || raw[1] || '';
             provNombre = provNombre || raw[3] || raw[2] || '';
@@ -3403,56 +3409,72 @@
             precioVentaClub = parseFloat(r.precioventaclub || r.precioclub || r.precioborraclub || raw[9] || '0') || 0;
           }
 
-          if (!bodega || !etiqueta) return;
+          bodega = (bodega || '').trim();
+          etiqueta = (etiqueta || '').trim();
+          provNombre = (provNombre || '').trim();
 
-          let art = state.articulos.find(a => 
-            a.bodega.toLowerCase().trim() === bodega.toLowerCase().trim() &&
-            a.etiqueta.toLowerCase().trim() === etiqueta.toLowerCase().trim() &&
-            (cepaCsv ? a.cepa.toLowerCase().trim() === cepaCsv.toLowerCase().trim() : true)
+          if (!bodega || !etiqueta) {
+            showToast(`Error en la fila ${lineNum}: Faltan datos de Bodega o Etiqueta. Importación cancelada.`, 'error');
+            return;
+          }
+
+          // 1) VALIDACIÓN DE ARTÍCULO (Coincidencia exacta de Bodega + Etiqueta)
+          const art = state.articulos.find(a => 
+            a.bodega.toLowerCase().trim() === bodega.toLowerCase() &&
+            a.etiqueta.toLowerCase().trim() === etiqueta.toLowerCase()
           );
 
           if (!art) {
-            art = state.articulos.find(a => 
-              a.bodega.toLowerCase().trim().includes(bodega.toLowerCase().trim()) &&
-              a.etiqueta.toLowerCase().trim().includes(etiqueta.toLowerCase().trim())
-            );
+            showToast(`Error en la fila ${lineNum}: El artículo "${bodega} - ${etiqueta}" no existe en el catálogo. Importación cancelada.`, 'error');
+            return;
           }
 
-          let prov = state.proveedores.find(p => p.nombre.toLowerCase().trim() === provNombre.toLowerCase().trim() || p.nombre.toLowerCase().includes(provNombre.toLowerCase().trim()));
-          if (!prov && provNombre) {
-            prov = getOrCreateSupplierByName(provNombre);
+          // 2) VALIDACIÓN DE PROVEEDOR (Debe existir previamente en el sistema)
+          if (!provNombre) {
+            showToast(`Error en la fila ${lineNum}: No se especificó el proveedor para "${bodega} - ${etiqueta}". Importación cancelada.`, 'error');
+            return;
           }
 
-          if (art && prov) {
-            const lastNum = state.entradas.reduce((max, ent) => Math.max(max, Number(ent.numeroCompra) || 0), 0);
-            const uxb = Number(art.uxb) || 1;
-
-            state.entradas.push({
-              id: generateUniqueId('ent'),
-              numeroCompra: lastNum + 1,
-              articuloId: art.id,
-              cepa: cepaCsv || art.cepa,
-              proveedorId: prov.id,
-              cantidadCajas: cajas,
-              unidadesSumadas: cajas * uxb,
-              precioCaja: precioCaja,
-              costoAdicionalCaja: costoAdicCaja,
-              precioVentaPublico: precioVentaPublico,
-              precioVentaClub: precioVentaClub,
-              fecha: fecha
-            });
-            count++;
+          const prov = state.proveedores.find(p => p.nombre.toLowerCase().trim() === provNombre.toLowerCase());
+          if (!prov) {
+            showToast(`Error en la fila ${lineNum}: El proveedor "${provNombre}" no existe en el sistema. Importación cancelada.`, 'error');
+            return;
           }
-        });
 
-        if (count > 0) {
-          logAuditoria('Entradas', 'Importación Masiva CSV', `Se cargaron ${count} compras de stock desde CSV`);
-          saveState();
-          renderAllViews();
-          showToast(`Importación exitosa: ${count} compras registradas desde CSV`, 'success');
-        } else {
-          showToast('No se pudieron emparejar las compras con artículos y proveedores existentes', 'error');
+          // 3) VALIDACIÓN DE AUTORIZACIÓN (El proveedor debe estar asociado al artículo)
+          const isAutorizado = (art.proveedoresIds || []).some(pid => String(pid) === String(prov.id));
+          if (!isAutorizado) {
+            showToast(`Error en la fila ${lineNum}: El proveedor "${prov.nombre}" no está autorizado para el artículo "${art.bodega} - ${art.etiqueta}". Importación cancelada.`, 'error');
+            return;
+          }
+
+          // Si pasa todas las validaciones de esta fila, se prepara el objeto
+          lastNum++;
+          const uxb = Number(art.uxb) || 1;
+          pendingEntries.push({
+            id: generateUniqueId('ent'),
+            numeroCompra: lastNum,
+            articuloId: art.id,
+            cepa: cepaCsv || art.cepa,
+            proveedorId: prov.id,
+            cantidadCajas: cajas,
+            unidadesSumadas: cajas * uxb,
+            precioCaja: precioCaja,
+            costoAdicionalCaja: costoAdicCaja,
+            precioVentaPublico: precioVentaPublico,
+            precioVentaClub: precioVentaClub,
+            fecha: fecha || new Date().toISOString().split('T')[0],
+            unidadEntrada: 'CAJA'
+          });
         }
+
+        // FASE 2: INSERCIÓN TRANSACCIONAL SÓLO SI TODAS LAS FILAS SON VÁLIDAS
+        state.entradas.push(...pendingEntries);
+        logAuditoria('Entradas', 'Importación Masiva CSV', `Se cargaron ${pendingEntries.length} compras de stock válidas desde CSV`);
+        saveState();
+        renderAllViews();
+        showToast(`Importación exitosa: ${pendingEntries.length} compras registradas desde CSV.`, 'success');
+
       } catch (err) {
         showToast('Error procesando el archivo CSV de compras', 'error');
       }
