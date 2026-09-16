@@ -839,12 +839,16 @@
   }
 
   function populateFilterSelects() {
-    // 1. Proveedores en Entradas y en Artículos
+    // 1. Proveedores en Entradas y en Artículos (Ordenados A-Z)
+    const sortedProvs = [...(state.proveedores || [])].sort((a, b) =>
+      (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' })
+    );
+
     const provSelect = document.getElementById('filter-entradas-proveedor');
     if (provSelect) {
       const currentVal = provSelect.value;
       const options = `<option value="">Todos los Proveedores</option>` +
-        (state.proveedores || []).map(p => `<option value="${p.id}" ${String(p.id) === String(currentVal) ? 'selected' : ''}>${p.nombre}</option>`).join('');
+        sortedProvs.map(p => `<option value="${p.id}" ${String(p.id) === String(currentVal) ? 'selected' : ''}>${p.nombre}</option>`).join('');
       provSelect.innerHTML = options;
     }
 
@@ -852,21 +856,22 @@
     if (artProvSelect) {
       const currentVal = artProvSelect.value;
       const options = `<option value="">-- Todos los Proveedores --</option>` +
-        (state.proveedores || []).map(p => `<option value="${p.id}" ${String(p.id) === String(currentVal) ? 'selected' : ''}>${p.nombre}</option>`).join('');
+        sortedProvs.map(p => `<option value="${p.id}" ${String(p.id) === String(currentVal) ? 'selected' : ''}>${p.nombre}</option>`).join('');
       artProvSelect.innerHTML = options;
     }
 
-    // 2. Provincias en Clientes
+    // 2. Provincias en Clientes (Ordenadas A-Z)
     const proviSelect = document.getElementById('filter-clientes-provincia');
     if (proviSelect) {
       const currentVal = proviSelect.value;
-      const distProvs = Array.from(new Set((state.clientes || []).map(c => (c.provincia || '').trim()).filter(Boolean))).sort();
+      const distProvs = Array.from(new Set((state.clientes || []).map(c => (c.provincia || '').trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
       const options = `<option value="">-- Todas las Provincias --</option>` +
         distProvs.map(p => `<option value="${p}" ${p.toLowerCase() === currentVal.toLowerCase() ? 'selected' : ''}>${p}</option>`).join('');
       proviSelect.innerHTML = options;
     }
 
-    // 3. Clientes en Salidas (ordenados A-Z)
+    // 3. Clientes en Salidas (Ordenados A-Z por Nombre Apellido)
     const cliSelect = document.getElementById('filter-salidas-cliente');
     if (cliSelect) {
       const currentVal = cliSelect.value;
@@ -880,13 +885,29 @@
       cliSelect.innerHTML = options;
     }
 
-    // 4. Membresías en Salidas
+    // 4. Membresías en Salidas y Clientes (Ordenadas A-Z)
+    const sortedMembs = [...(state.membresias || [])].sort((a, b) => {
+      const labelA = `[${a.tipo || 'Selección'}] ${a.codigo || ''} - ${a.descripcion || ''}`;
+      const labelB = `[${b.tipo || 'Selección'}] ${b.codigo || ''} - ${b.descripcion || ''}`;
+      return labelA.localeCompare(labelB, 'es', { sensitivity: 'base' });
+    });
+
     const membSelect = document.getElementById('filter-salidas-membresia');
     if (membSelect) {
       const currentVal = membSelect.value;
       const options = `<option value="">Todas las Membresías</option>` +
-        (state.membresias || []).map(m => `<option value="${m.id}" ${String(m.id) === String(currentVal) ? 'selected' : ''}>[${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion}</option>`).join('');
+        sortedMembs.map(m => `<option value="${m.id}" ${String(m.id) === String(currentVal) ? 'selected' : ''}>[${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion}</option>`).join('');
       membSelect.innerHTML = options;
+    }
+
+    const cliMembSelect = document.getElementById('filter-clientes-membresia');
+    if (cliMembSelect) {
+      const currentVal = cliMembSelect.value;
+      const options = `<option value="">-- Todas las Membresías --</option>
+        <option value="SIN_MEMBRESIA" ${currentVal === 'SIN_MEMBRESIA' ? 'selected' : ''}>Sin Membresía</option>
+        <option value="CON_MEMBRESIA" ${currentVal === 'CON_MEMBRESIA' ? 'selected' : ''}>Con Cualquier Membresía</option>` +
+        sortedMembs.map(m => `<option value="${m.id}" ${String(m.id) === String(currentVal) ? 'selected' : ''}>[${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion}</option>`).join('');
+      cliMembSelect.innerHTML = options;
     }
   }
 
@@ -1827,9 +1848,22 @@
   window.editProveedor = function (id) { window.openProveedorForm(id); };
   window.deleteProveedor = function (id) {
     const prov = state.proveedores.find(p => String(p.id) === String(id));
-    if (confirm('¿Desea eliminar este proveedor?')) {
+    const provName = prov ? prov.nombre : id;
+
+    const hasEntradas = (state.entradas || []).some(e => String(e.proveedorId) === String(id));
+    const hasArticulos = (state.articulos || []).some(a => (a.proveedoresIds || []).some(pid => String(pid) === String(id)));
+
+    if (hasEntradas || hasArticulos) {
+      let motivo = hasEntradas ? 'tiene compras (entradas) registradas' : 'está asociado a uno o más artículos';
+      if (hasEntradas && hasArticulos) motivo = 'tiene compras registradas y está asociado a artículos del catálogo';
+      showToast(`No se puede eliminar el proveedor "${provName}" porque ${motivo}.`, 'error');
+      alert(`⚠️ NO SE PUEDE ELIMINAR PROVEEDOR\n\nEl proveedor "${provName}" no se puede eliminar porque ${motivo}.`);
+      return;
+    }
+
+    if (confirm(`¿Desea eliminar el proveedor "${provName}"?`)) {
       state.proveedores = state.proveedores.filter(p => String(p.id) !== String(id));
-      logAuditoria('Proveedores', 'Eliminación de Proveedor', `Se eliminó el proveedor ${prov ? prov.nombre : id}`);
+      logAuditoria('Proveedores', 'Eliminación de Proveedor', `Se eliminó el proveedor ${provName}`);
       saveState();
       renderAllViews();
       showToast('Proveedor eliminado', 'success');
@@ -1848,7 +1882,11 @@
 
     const selectedProvs = isEdit ? (art.proveedoresIds || []) : [];
 
-    const provsCheckboxes = state.proveedores.map(p => {
+    const sortedProvs = [...(state.proveedores || [])].sort((a, b) =>
+      (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' })
+    );
+
+    const provsCheckboxes = sortedProvs.map(p => {
       const isChecked = selectedProvs.includes(String(p.id)) ? 'checked' : '';
       return `
         <label class="checkbox-label">
@@ -1939,9 +1977,30 @@
   window.editArticulo = function (id) { window.openArticuloForm(id); };
   window.deleteArticulo = function (id) {
     const art = state.articulos.find(a => String(a.id) === String(id));
-    if (confirm('¿Desea eliminar este artículo?')) {
+    const artName = art ? `${art.bodega} - ${art.etiqueta}` : id;
+
+    const hasEntradas = (state.entradas || []).some(e => String(e.articuloId) === String(id));
+    const hasSalidas = (state.salidas || []).some(s => String(s.articuloId) === String(id));
+    const metrics = typeof getArticuloMetrics === 'function' ? getArticuloMetrics(id) : { stock: 0 };
+    const hasStock = metrics.stock > 0;
+    const hasMembresias = (state.membresias || []).some(m => (m.items || []).some(item => String(item.articuloId) === String(id)));
+
+    if (hasEntradas || hasSalidas || hasStock || hasMembresias) {
+      let motivos = [];
+      if (hasEntradas) motivos.push('compras (entradas)');
+      if (hasSalidas) motivos.push('ventas (salidas)');
+      if (hasStock) motivos.push(`stock activo (${metrics.stock} bot.)`);
+      if (hasMembresias) motivos.push('pertenece a planes de membresía');
+
+      const motivoText = motivos.join(', ');
+      showToast(`No se puede eliminar el artículo "${artName}" porque tiene movimientos: ${motivoText}.`, 'error');
+      alert(`⚠️ NO SE PUEDE ELIMINAR ARTÍCULO\n\nEl vino "${artName}" no se puede eliminar porque tiene movimientos asociados: ${motivoText}.`);
+      return;
+    }
+
+    if (confirm(`¿Desea eliminar el artículo "${artName}"?`)) {
       state.articulos = state.articulos.filter(a => String(a.id) !== String(id));
-      logAuditoria('Artículos', 'Eliminación de Artículo', `Se eliminó el vino ${art ? art.bodega + ' - ' + art.etiqueta : id}`);
+      logAuditoria('Artículos', 'Eliminación de Artículo', `Se eliminó el vino ${artName}`);
       saveState();
       renderAllViews();
       showToast('Artículo eliminado', 'success');
@@ -2176,7 +2235,13 @@
     const cli = clienteId ? state.clientes.find(c => String(c.id) === String(clienteId)) : null;
     const isEdit = !!cli;
 
-    const membOptions = state.membresias.map(m => `
+    const sortedMembs = [...(state.membresias || [])].sort((a, b) => {
+      const labelA = `[${a.tipo || 'Selección'}] ${a.codigo || ''} - ${a.descripcion || ''}`;
+      const labelB = `[${b.tipo || 'Selección'}] ${b.codigo || ''} - ${b.descripcion || ''}`;
+      return labelA.localeCompare(labelB, 'es', { sensitivity: 'base' });
+    });
+
+    const membOptions = sortedMembs.map(m => `
       <option value="${m.id}" data-tipo="${m.tipo || 'Selección'}" ${isEdit && String(cli.membresiaId) === String(m.id) ? 'selected' : ''}>
         [${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion} (${formatCurrency(m.precio || 0)})
       </option>
@@ -3579,6 +3644,64 @@
     });
     e.target.value = '';
   });
+
+  // 6. JSON Backup Export & Import
+  const btnExportJson = document.getElementById('btn-export-json');
+  if (btnExportJson) {
+    btnExportJson.addEventListener('click', () => {
+      try {
+        const jsonStr = JSON.stringify(state, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `BORRA_CavaControl_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Backup JSON generado y descargado con éxito', 'success');
+      } catch (err) {
+        showToast('Error al exportar el backup JSON', 'error');
+      }
+    });
+  }
+
+  const importJsonFile = document.getElementById('import-json-file');
+  if (importJsonFile) {
+    importJsonFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (evt) {
+        try {
+          const importedData = JSON.parse(evt.target.result);
+          if (!importedData || typeof importedData !== 'object' || !Array.isArray(importedData.articulos) || !Array.isArray(importedData.proveedores)) {
+            showToast('El archivo seleccionado no es un backup JSON válido de BORRA CavaControl', 'error');
+            return;
+          }
+
+          if (!confirm('⚠️ ¿ESTÁS SEGURO de restaurar la base de datos desde este backup?\n\nEsta acción reemplazará TODOS los datos actuales (Artículos, Stock, Ventas, Clientes, Membresías) con la información del respaldo.')) {
+            return;
+          }
+
+          state = importedData;
+          if (!Array.isArray(state.usuarios)) state.usuarios = [];
+          if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
+          normalizeMembresias(state.membresias);
+          logAuditoria('Sistema', 'Restauración de Backup JSON', 'Se restauró la base de datos completa desde un archivo de respaldo JSON');
+          saveState();
+          renderAllViews();
+          showToast('¡Base de datos restaurada exitosamente desde el backup!', 'success');
+        } catch (err) {
+          showToast('Error al leer o procesar el archivo JSON de backup', 'error');
+        }
+      };
+      reader.readAsText(file, 'UTF-8');
+      e.target.value = '';
+    });
+  }
 
   // --- LOGIN EVENT LISTENERS ---
   const formLogin = document.getElementById('form-login');
