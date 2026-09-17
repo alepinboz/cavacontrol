@@ -49,8 +49,12 @@ def init_sql_server():
         bodega NVARCHAR(255) NOT NULL,
         etiqueta NVARCHAR(255) NOT NULL,
         cepa NVARCHAR(255) NOT NULL,
-        uxb INT NOT NULL DEFAULT 6
+        uxb INT NOT NULL DEFAULT 6,
+        no_reponer BIT NOT NULL DEFAULT 0
     );
+
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Articulos') AND name = 'no_reponer')
+    ALTER TABLE Articulos ADD no_reponer BIT NOT NULL DEFAULT 0;
 
     IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ArticuloProveedores')
     CREATE TABLE ArticuloProveedores (

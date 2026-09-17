@@ -159,6 +159,7 @@ def init_postgres_tables_if_needed():
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS lotes_detalle TEXT;
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'Admin';
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS fecha_creacion VARCHAR(50);
+        ALTER TABLE Articulos ADD COLUMN IF NOT EXISTS no_reponer BOOLEAN DEFAULT FALSE;
         """
         cursor.execute(schema_sql)
         conn.commit()
@@ -349,7 +350,7 @@ def get_full_state():
         proveedores = [{"id": str(r[0]), "nombre": str(r[1]), "telefono": str(r[2] or ''), "email": str(r[3] or '')} for r in cursor.fetchall()]
 
         # Articulos + Proveedores
-        db_execute(cursor, "SELECT id, bodega, etiqueta, cepa, uxb FROM Articulos")
+        db_execute(cursor, "SELECT id, bodega, etiqueta, cepa, uxb, no_reponer FROM Articulos")
         articulos_rows = cursor.fetchall()
         
         db_execute(cursor, "SELECT articulo_id, proveedor_id FROM ArticuloProveedores")
@@ -366,6 +367,7 @@ def get_full_state():
                 "etiqueta": str(r[2]),
                 "cepa": str(r[3]),
                 "uxb": int(r[4]),
+                "noReponer": bool(r[5]) if len(r) > 5 and r[5] is not None else False,
                 "proveedoresIds": art_provs_map.get(art_id, [])
             })
 
@@ -508,11 +510,12 @@ def sync_full_state():
             safe_str(a.get('bodega'), 255),
             safe_str(a.get('etiqueta'), 255),
             safe_str(a.get('cepa'), 255),
-            safe_int(a.get('uxb'), 6)
+            safe_int(a.get('uxb'), 6),
+            True if a.get('noReponer') else False
         ) for a in data.get('articulos', []) if a.get('id')]
         art_rows = deduplicate_rows_by_id(art_rows)
         if art_rows:
-            db_executemany(cursor, "INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb) VALUES (?, ?, ?, ?, ?)", art_rows)
+            db_executemany(cursor, "INSERT INTO Articulos (id, bodega, etiqueta, cepa, uxb, no_reponer) VALUES (?, ?, ?, ?, ?, ?)", art_rows)
 
         valid_art_ids = {a[0] for a in art_rows}
 
@@ -590,8 +593,8 @@ def sync_full_state():
             safe_str(e.get('proveedorId')),
             safe_int(e.get('cantidadCajas'), 1),
             safe_int(e.get('unidadesSumadas'), 0),
-            safe_float(e.get('precioCaja'), 0.0),
-            safe_float(e.get('costoAdicionalCaja'), 0.0),
+            safe_float(e.get('precioCaja') if e.get('precioCaja') is not None else e.get('precio'), 0.0),
+            safe_float(e.get('costoAdicionalCaja') if e.get('costoAdicionalCaja') is not None else e.get('costoAdicional'), 0.0),
             safe_str(e.get('fecha', ''), 20),
             safe_float(e.get('precioVentaPublico'), 0.0),
             safe_float(e.get('precioVentaClub'), 0.0),

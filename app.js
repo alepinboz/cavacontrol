@@ -457,7 +457,7 @@
     checkSession();
   }
 
-  function saveState() {
+  function saveState(immediate = false) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
@@ -465,10 +465,22 @@
     }
 
     if (syncTimeout) clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(() => {
+    if (immediate) {
       triggerBackgroundSqlServerSync();
-    }, 200);
+    } else {
+      syncTimeout = setTimeout(() => {
+        triggerBackgroundSqlServerSync();
+      }, 200);
+    }
   }
+
+  window.addEventListener('beforeunload', () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
+      navigator.sendBeacon(`${API_URL}/db/sync`, blob);
+    } catch (e) {}
+  });
 
   async function triggerBackgroundSqlServerSync() {
     try {
@@ -1068,106 +1080,133 @@
       }
     }
 
-    // Render Client Membership Deliveries Table (Resumen de Membresías por Cliente)
-    const tableClientMembBody = document.getElementById('tbody-dash-client-memberships');
-    if (tableClientMembBody) {
-      const clientMembDeliveries = new Map();
+    // Render Top 10 Clientes Table (Ranking por Facturación)
+    const tableTopClientsBody = document.getElementById('tbody-dash-top-clients') || document.getElementById('tbody-dash-client-memberships');
+    if (tableTopClientsBody) {
+      const clientSalesMap = new Map();
+
+      (state.clientes || []).forEach(c => {
+        const memb = (state.membresias || []).find(m => String(m.id) === String(c.membresiaId));
+        let membTipoDisplay = 'Sin Membresía';
+        if (memb && memb.tipo) {
+          membTipoDisplay = memb.tipo;
+        } else if (c.membresiaId) {
+          membTipoDisplay = 'Selección';
+        }
+
+        clientSalesMap.set(String(c.id), {
+          clienteId: String(c.id),
+          nombreCompleto: `${c.nombre} ${c.apellido}`.trim(),
+          membTipo: membTipoDisplay,
+          botellasCount: 0,
+          totalDinero: 0,
+          transKeys: new Set()
+        });
+      });
 
       (state.salidas || []).forEach(s => {
-        if (s.tipoVenta === 'MEMBRESIA') {
-          const cli = (state.clientes || []).find(c => String(c.id) === String(s.clienteId));
-          const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
-          const cliName = cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A';
-          const membTipo = memb ? (memb.tipo || 'Selección') : (s.detalle && s.detalle.toUpperCase().includes('ELITE') ? 'Élite' : 'Selección');
-          const membCodigo = memb ? memb.codigo : '';
-          const membDesc = memb ? memb.descripcion : (s.detalle || 'Membresía');
-          const membPrecio = memb ? (Number(memb.precio) || 0) : 0;
-          const membId = s.membresiaId || 'custom';
-          const clienteId = s.clienteId;
+        const cId = String(s.clienteId);
+        let cData = clientSalesMap.get(cId);
+        if (!cData) {
+          const cli = (state.clientes || []).find(c => String(c.id) === cId);
+          const memb = cli ? (state.membresias || []).find(m => String(m.id) === String(cli.membresiaId)) : null;
+          cData = {
+            clienteId: cId,
+            nombreCompleto: cli ? `${cli.nombre} ${cli.apellido}`.trim() : 'Cliente Desconocido',
+            membTipo: memb ? (memb.tipo || 'Selección') : 'Sin Membresía',
+            botellasCount: 0,
+            totalDinero: 0,
+            transKeys: new Set()
+          };
+          clientSalesMap.set(cId, cData);
+        }
 
-          const groupKey = `${membId}_${clienteId}`;
+        const cantBot = Number(s.cantidadBotellas) || 0;
+        const pu = Number(s.precioUnitario) || 0;
+        cData.botellasCount += cantBot;
+
+        if (s.tipoVenta === 'BOTELLA') {
+          cData.totalDinero += (pu * cantBot);
+        } else if (s.tipoVenta === 'MEMBRESIA') {
           const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
-
-          if (!clientMembDeliveries.has(groupKey)) {
-            clientMembDeliveries.set(groupKey, {
-              membId,
-              clienteId,
-              cliName,
-              membTipo,
-              membCodigo,
-              membDesc,
-              transKeys: new Set(),
-              ventasCount: 0,
-              botellasCount: 0,
-              subtotalDinero: 0,
-              ultimaFecha: s.fecha || ''
-            });
-          }
-
-          const group = clientMembDeliveries.get(groupKey);
-          const cantBot = Number(s.cantidadBotellas) || 0;
-          const pu = Number(s.precioUnitario) || 0;
-
-          group.botellasCount += cantBot;
-
-          if (!group.transKeys.has(transKey)) {
-            group.transKeys.add(transKey);
-            group.ventasCount++;
+          if (!cData.transKeys.has(transKey)) {
+            cData.transKeys.add(transKey);
             if (pu > 0) {
               const siblings = (state.salidas || []).filter(item => {
                 const itemKey = item.id ? item.id.split('-').slice(0, 3).join('-') : `${item.fecha}_${item.clienteId}_${item.membresiaId}`;
                 return itemKey === transKey;
               });
               const deliveryTotal = siblings.reduce((sum, item) => sum + (Number(item.precioUnitario) || 0) * (Number(item.cantidadBotellas) || 0), 0);
-              group.subtotalDinero += deliveryTotal;
+              cData.totalDinero += deliveryTotal;
             } else {
-              group.subtotalDinero += membPrecio;
+              const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
+              cData.totalDinero += memb ? (Number(memb.precio) || 0) : 0;
             }
-          }
-
-          if (s.fecha && (!group.ultimaFecha || s.fecha > group.ultimaFecha)) {
-            group.ultimaFecha = s.fecha;
           }
         }
       });
 
-      const listGrouped = Array.from(clientMembDeliveries.values());
+      const activeClientsList = Array.from(clientSalesMap.values())
+        .filter(c => c.totalDinero > 0 || c.botellasCount > 0)
+        .sort((a, b) => {
+          if (b.totalDinero !== a.totalDinero) return b.totalDinero - a.totalDinero;
+          return b.botellasCount - a.botellasCount;
+        })
+        .slice(0, 10);
 
-      if (listGrouped.length === 0) {
-        tableClientMembBody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No se han registrado entregas de membresías a clientes aún</td></tr>`;
+      if (activeClientsList.length === 0) {
+        tableTopClientsBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No se han registrado compras de clientes aún</td></tr>`;
       } else {
         let html = '';
-        listGrouped.sort((a, b) => new Date(b.ultimaFecha || 0) - new Date(a.ultimaFecha || 0)).forEach(g => {
-          const isElite = g.membTipo && (g.membTipo.toLowerCase().includes('élite') || g.membTipo.toLowerCase().includes('elite'));
-          const badgeClass = isElite ? 'badge-warning' : 'badge-info';
-          const icon = isElite ? '👑' : '🍷';
+        activeClientsList.forEach((c, index) => {
+          const rank = index + 1;
+          let rankBadge = `<span class="badge badge-info" style="font-weight:700;">#${rank}</span>`;
+          if (rank === 1) rankBadge = `<span class="badge badge-warning" style="font-weight:700; background:gold; color:#000;">🏆 #1</span>`;
+          else if (rank === 2) rankBadge = `<span class="badge badge-secondary" style="font-weight:700; background:#c0c0c0; color:#000;">🥈 #2</span>`;
+          else if (rank === 3) rankBadge = `<span class="badge badge-secondary" style="font-weight:700; background:#cd7f32; color:#fff;">🥉 #3</span>`;
+
+          const isElite = c.membTipo.toLowerCase().includes('élite') || c.membTipo.toLowerCase().includes('elite');
+          const isSeleccion = c.membTipo.toLowerCase().includes('selección') || c.membTipo.toLowerCase().includes('seleccion');
+          
+          let membBadge = `<span class="badge badge-secondary">Sin Membresía</span>`;
+          if (isElite) membBadge = `<span class="badge badge-warning">👑 Élite</span>`;
+          else if (isSeleccion) membBadge = `<span class="badge badge-info">🍷 Selección</span>`;
+          else if (c.membTipo !== 'Sin Membresía') membBadge = `<span class="badge badge-info">🍷 ${c.membTipo}</span>`;
 
           html += `
             <tr>
-              <td><span class="badge ${badgeClass}">${icon} ${g.membTipo} ${g.membCodigo ? `[${g.membCodigo}]` : ''}</span></td>
-              <td><strong>${g.cliName}</strong></td>
-              <td><span class="badge badge-info">${g.ventasCount} ${g.ventasCount === 1 ? 'venta' : 'ventas'}</span></td>
-              <td><strong>${g.botellasCount}</strong> bot.</td>
-              <td><strong class="text-gold" style="font-size:1.05rem">${formatCurrency(g.subtotalDinero)}</strong></td>
-              <td><small class="text-muted">${g.ultimaFecha || '--'}</small></td>
+              <td>${rankBadge}</td>
+              <td><strong>${c.nombreCompleto}</strong></td>
+              <td>${membBadge}</td>
+              <td><strong>${c.botellasCount}</strong> bot.</td>
+              <td><strong class="text-gold" style="font-size:1.05rem;">${formatCurrency(c.totalDinero)}</strong></td>
             </tr>
           `;
         });
-        tableClientMembBody.innerHTML = html;
+        tableTopClientsBody.innerHTML = html;
       }
     }
 
-    // Render Stock Alerts
+    // Render Stock Alerts (< 6 unidades, omitiendo noReponer === true)
     const alertsTbody = document.getElementById('tbody-dash-alerts');
     if (alertsTbody) {
       alertsTbody.innerHTML = '';
-      const lowStockArts = (state.articulos || []).map(a => ({
-        ...a,
-        stock: getArticuloMetrics(a.id).stock
-      })).filter(a => a.stock <= 6);
+      const lowStockArts = (state.articulos || [])
+        .filter(a => !a.noReponer)
+        .map(a => ({
+          ...a,
+          stock: getArticuloMetrics(a.id).stock
+        }))
+        .filter(a => a.stock < 6)
+        .sort((a, b) => {
+          if (a.stock !== b.stock) return a.stock - b.stock;
+          const nameA = `${a.bodega} ${a.etiqueta}`.toLowerCase();
+          const nameB = `${b.bodega} ${b.etiqueta}`.toLowerCase();
+          return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+        });
 
       if (lowStockArts.length === 0) {
-        alertsTbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No hay productos con stock crítico</td></tr>`;
+        alertsTbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No hay productos con stock crítico (&lt; 6 unidades)</td></tr>`;
       } else {
         let html = '';
         lowStockArts.forEach(a => {
@@ -1177,8 +1216,12 @@
             <tr>
               <td><strong>${a.bodega}</strong> ${a.etiqueta}</td>
               <td>${a.cepa}</td>
-              <td><strong>${a.stock}</strong> bot.</td>
+              <td><strong class="text-gold">${a.stock}</strong> bot.</td>
               <td><span class="badge ${badgeClass}">${estadoText}</span></td>
+              <td>
+                <button class="btn btn-ghost btn-sm btn-icon" onclick="window.editArticulo('${a.id}')" title="Editar artículo"><i data-lucide="edit-2"></i></button>
+                <button class="btn btn-ghost btn-sm text-muted" onclick="window.toggleNoReponer('${a.id}')" title="Marcar como No Reponer (Descontinuado)" style="font-size:0.75rem; padding:0.2rem 0.4rem;"><i data-lucide="bell-off"></i> No Reponer</button>
+              </td>
             </tr>
           `;
         });
@@ -1380,10 +1423,12 @@
         ? provs.map(name => `<span class="badge badge-info">${name}</span>`).join(' ')
         : '<span class="text-muted">Ninguno asignado</span>';
 
+      const noReponerBadge = a.noReponer ? ' <span class="badge badge-danger" title="Artículo descontinuado (omitido en Alertas de Stock Bajo)" style="font-size:0.7rem; padding:0.1rem 0.35rem; margin-left:0.3rem;">🚫 No Reponer</span>' : '';
+
       html += `
         <tr>
           <td><strong>${a.bodega}</strong></td>
-          <td>${a.etiqueta}</td>
+          <td>${a.etiqueta}${noReponerBadge}</td>
           <td>${a.cepa}</td>
           <td>${a.uxb} un.</td>
           <td>${provsDisplay}</td>
@@ -1925,6 +1970,14 @@
             ${provsCheckboxes}
           </div>
         </div>
+
+        <div class="form-group" style="margin-top:0.75rem; padding:0.6rem; background:rgba(255,255,255,0.03); border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+          <label class="checkbox-label" style="display:flex; align-items:center; gap:0.5rem; font-weight:600; cursor:pointer;">
+            <input type="checkbox" id="art-no-reponer" ${isEdit && art.noReponer ? 'checked' : ''}>
+            <span>🚫 No reponer este artículo (Descontinuado / Omitir en Alertas de Stock Bajo)</span>
+          </label>
+        </div>
+
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="window.closeModal()">Cancelar</button>
           <button type="submit" class="btn btn-primary">${isEdit ? 'Guardar Cambios' : 'Crear Artículo'}</button>
@@ -1941,6 +1994,7 @@
       const cepa = document.getElementById('art-cepa').value.trim();
       const uxb = parseInt(document.getElementById('art-uxb').value, 10) || 6;
       const checkedProvs = Array.from(document.querySelectorAll('input[name="articulo-provs"]:checked')).map(cb => cb.value);
+      const noReponer = document.getElementById('art-no-reponer').checked;
 
       if (checkedProvs.length === 0) {
         showToast('Debe seleccionar al menos un proveedor autorizado', 'error');
@@ -1952,8 +2006,9 @@
         art.etiqueta = etiqueta;
         art.cepa = cepa;
         art.uxb = uxb;
+        art.noReponer = noReponer;
         art.proveedoresIds = checkedProvs;
-        logAuditoria('Artículos', 'Edición de Artículo', `Se actualizó el artículo ${bodega} - ${etiqueta}`);
+        logAuditoria('Artículos', 'Edición de Artículo', `Se actualizó el artículo ${bodega} - ${etiqueta}${noReponer ? ' (No Reponer)' : ''}`);
         showToast('Artículo actualizado', 'success');
       } else {
         state.articulos.push({
@@ -1962,9 +2017,10 @@
           etiqueta,
           cepa,
           uxb,
+          noReponer,
           proveedoresIds: checkedProvs
         });
-        logAuditoria('Artículos', 'Alta de Artículo', `Se creó el vino ${bodega} - ${etiqueta} (${cepa})`);
+        logAuditoria('Artículos', 'Alta de Artículo', `Se creó el vino ${bodega} - ${etiqueta} (${cepa})${noReponer ? ' (No Reponer)' : ''}`);
         showToast('Artículo creado exitosamente', 'success');
       }
 
@@ -1975,6 +2031,16 @@
   };
 
   window.editArticulo = function (id) { window.openArticuloForm(id); };
+  window.toggleNoReponer = function (id) {
+    const art = state.articulos.find(a => String(a.id) === String(id));
+    if (!art) return;
+    art.noReponer = !art.noReponer;
+    const statusStr = art.noReponer ? 'marcado como NO REPONER (descontinuado)' : 'reactivado para reposición';
+    logAuditoria('Artículos', 'Cambio de Estado Reposición', `El vino ${art.bodega} - ${art.etiqueta} fue ${statusStr}`);
+    saveState();
+    renderAllViews();
+    showToast(`Artículo ${art.bodega} ${art.etiqueta}: ${statusStr}`, 'info');
+  };
   window.deleteArticulo = function (id) {
     const art = state.articulos.find(a => String(a.id) === String(id));
     const artName = art ? `${art.bodega} - ${art.etiqueta}` : id;
@@ -2692,7 +2758,7 @@
       logAuditoria('Entradas', 'Edición de Compra', `Se actualizaron los costos y precios de Compra #${eObj.numeroCompra}`);
 
       recalculateAllSalidasFifo(false);
-      saveState();
+      saveState(true);
       closeModal();
       renderAllViews();
       showToast(`Compra #${eObj.numeroCompra} actualizada. Costos y ganancias PEPS recalculados!`, 'success');
@@ -2707,7 +2773,7 @@
       state.entradas = state.entradas.filter(e => String(e.id) !== String(entradaId));
       logAuditoria('Entradas', 'Eliminación de Compra', `Se eliminó la Compra #${eObj.numeroCompra}`);
       recalculateAllSalidasFifo(false);
-      saveState();
+      saveState(true);
       renderAllViews();
       showToast(`Compra #${eObj.numeroCompra} eliminada. Ganancias PEPS recalculadas.`, 'success');
     }

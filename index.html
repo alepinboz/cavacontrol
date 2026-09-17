@@ -135,14 +135,15 @@
         
         <!-- DASHBOARD VIEW REDESIGNED FOR BORRA -->
         <section id="view-dashboard" class="view-section active">
-          <div class="stats-grid">
+          <!-- Renglón 1 (Top Grid: 4 Tarjetas) -->
+          <div class="stats-grid-top">
             <div class="stat-card">
               <div class="stat-icon bg-gold">
                 <i data-lucide="award"></i>
               </div>
               <div class="stat-details" style="flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                  <span class="stat-label">Membresías Élite</span>
+                  <span class="stat-label">MEMBRESÍAS ÉLITE</span>
                   <span id="dash-pct-elite" class="badge badge-warning" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Participación sobre facturación total">0%</span>
                 </div>
                 <h3 class="stat-value" id="dash-elite-subtotal" style="color:var(--gold-accent)">$0</h3>
@@ -156,7 +157,7 @@
               </div>
               <div class="stat-details" style="flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                  <span class="stat-label">Membresías Selección</span>
+                  <span class="stat-label">MEMBRESÍAS SELECCIÓN</span>
                   <span id="dash-pct-seleccion" class="badge badge-info" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Participación sobre facturación total">0%</span>
                 </div>
                 <h3 class="stat-value" id="dash-seleccion-subtotal">$0</h3>
@@ -170,7 +171,7 @@
               </div>
               <div class="stat-details" style="flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                  <span class="stat-label">Ventas por Botella</span>
+                  <span class="stat-label">VENTAS POR BOTELLA</span>
                   <span id="dash-pct-botella" class="badge badge-success" style="font-size:0.75rem; padding:0.15rem 0.4rem; font-weight:600;" title="Participación sobre facturación total">0%</span>
                 </div>
                 <h3 class="stat-value" id="dash-botella-subtotal" style="color:var(--emerald)">$0</h3>
@@ -191,6 +192,20 @@
                 <span class="stat-subtext" id="dash-total-botellas">0 botellas vendidas en total</span>
               </div>
             </div>
+          </div>
+
+          <!-- Renglón 2 (Bottom Grid: 2 Tarjetas) -->
+          <div class="stats-grid-bottom">
+            <div class="stat-card">
+              <div class="stat-icon bg-wine">
+                <i data-lucide="boxes"></i>
+              </div>
+              <div class="stat-details" style="flex:1;">
+                <span class="stat-label">VALORACIÓN STOCK</span>
+                <h3 class="stat-value" id="dash-val-stock">$0</h3>
+                <span class="stat-subtext" id="dash-sub-stock">0 botellas en cava</span>
+              </div>
+            </div>
 
             <div class="stat-card">
               <div class="stat-icon bg-emerald">
@@ -205,48 +220,39 @@
                 <span class="stat-subtext" id="dash-ganancia-subtext">Costo lote PEPS descontado</span>
               </div>
             </div>
-
-            <div class="stat-card">
-              <div class="stat-icon bg-wine">
-                <i data-lucide="boxes"></i>
-              </div>
-              <div class="stat-details" style="flex:1;">
-                <span class="stat-label">Valorización Stock</span>
-                <h3 class="stat-value" id="dash-val-stock">$0</h3>
-                <span class="stat-subtext" id="dash-sub-stock">0 botellas en cava</span>
-              </div>
-            </div>
           </div>
 
+          <!-- Dashboard Widgets Grid -->
           <div class="dashboard-grid">
+            <!-- Widget 1: Top 10 Clientes -->
             <div class="card shadow-sm">
               <div class="card-header">
-                <h3><i data-lucide="users"></i> Entregas de Membresías por Cliente</h3>
+                <h3><i data-lucide="trophy"></i> Top 10 Clientes (Facturación)</h3>
               </div>
               <div class="card-body p-0">
                 <div class="table-responsive">
-                  <table class="table" id="table-dash-client-memberships">
+                  <table class="table" id="table-dash-top-clients">
                     <thead>
                       <tr>
-                        <th>Membresía / Tipo</th>
+                        <th>#</th>
                         <th>Cliente</th>
-                        <th>Ventas / Entregas</th>
-                        <th>Botellas Entregadas</th>
-                        <th>Subtotal ($)</th>
-                        <th>Última Entrega</th>
+                        <th>Membresía</th>
+                        <th>Botellas Compradas</th>
+                        <th>Total Comprado ($)</th>
                       </tr>
                     </thead>
-                    <tbody id="tbody-dash-client-memberships">
-                      <tr><td colspan="6" class="text-center text-muted">Cargando entregas de membresías por cliente...</td></tr>
+                    <tbody id="tbody-dash-top-clients">
+                      <tr><td colspan="5" class="text-center text-muted">Cargando ranking de clientes...</td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
 
+            <!-- Widget 2: Alertas de Stock Bajo (< 6 unidades) -->
             <div class="card shadow-sm">
               <div class="card-header">
-                <h3><i data-lucide="alert-triangle"></i> Alertas de Stock Bajo (&le; 6 unidades)</h3>
+                <h3><i data-lucide="alert-triangle"></i> Alertas de Stock Bajo (&lt; 6 unidades)</h3>
               </div>
               <div class="card-body p-0">
                 <div class="table-responsive">
@@ -257,10 +263,11 @@
                         <th>Cepa</th>
                         <th>Stock Actual</th>
                         <th>Estado</th>
+                        <th>Acciones</th>
                       </tr>
                     </thead>
                     <tbody id="tbody-dash-alerts">
-                      <tr><td colspan="4" class="text-center text-muted">No hay productos con stock crítico</td></tr>
+                      <tr><td colspan="5" class="text-center text-muted">No hay productos con stock crítico</td></tr>
                     </tbody>
                   </table>
                 </div>
