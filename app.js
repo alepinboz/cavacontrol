@@ -411,7 +411,7 @@
       const res = await fetch(`${API_URL}/db?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.articulos && data.proveedores) {
+        if (data.articulos && Array.isArray(data.articulos) && data.articulos.length > 0) {
           state = data;
           if (!Array.isArray(state.usuarios)) state.usuarios = [];
           if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
@@ -442,12 +442,15 @@
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        state = JSON.parse(stored);
-        if (!Array.isArray(state.usuarios)) state.usuarios = [];
-        if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
-        normalizeMembresias(state.membresias);
-        if (backfillFifoSalidasHistorical()) {
-          saveState();
+        const parsedState = JSON.parse(stored);
+        if (parsedState && Array.isArray(parsedState.articulos) && parsedState.articulos.length > 0) {
+          state = parsedState;
+          if (!Array.isArray(state.usuarios)) state.usuarios = [];
+          if (!Array.isArray(state.auditoriaLogs)) state.auditoriaLogs = [];
+          normalizeMembresias(state.membresias);
+          if (backfillFifoSalidasHistorical()) {
+            saveState();
+          }
         }
       }
     } catch (e) {
@@ -459,9 +462,15 @@
 
   function saveState(immediate = false) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (state && Array.isArray(state.articulos) && state.articulos.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
     } catch (e) {
       console.error('Error guardando en localStorage:', e);
+    }
+
+    if (!state || !Array.isArray(state.articulos) || state.articulos.length === 0) {
+      return;
     }
 
     if (syncTimeout) clearTimeout(syncTimeout);
@@ -474,15 +483,10 @@
     }
   }
 
-  window.addEventListener('beforeunload', () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
-      navigator.sendBeacon(`${API_URL}/db/sync`, blob);
-    } catch (e) {}
-  });
-
   async function triggerBackgroundSqlServerSync() {
+    if (!state || !Array.isArray(state.articulos) || state.articulos.length === 0) {
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/db/sync`, {
         method: 'POST',

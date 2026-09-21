@@ -465,6 +465,16 @@ def sync_full_state():
         conn = get_db()
         cursor = conn.cursor()
 
+        # Security Guard: Prevent accidental DB blanking if incoming payload is empty
+        incoming_art_count = len(data.get('articulos', [])) if data and isinstance(data.get('articulos'), list) else 0
+        db_execute(cursor, "SELECT COUNT(*) FROM Articulos")
+        existing_art_row = cursor.fetchone()
+        existing_art_count = existing_art_row[0] if existing_art_row else 0
+
+        if existing_art_count > 0 and incoming_art_count == 0:
+            response.status = 400
+            return {"success": False, "message": "RECHAZADO POR SEGURIDAD: No se permite sincronizar un estado vacío sobre una base de datos con información activa."}
+
         # Clear existing tables in safe order
         db_execute(cursor, "DELETE FROM AuditoriaLogs;")
         db_execute(cursor, "DELETE FROM Salidas;")
