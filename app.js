@@ -328,6 +328,22 @@
 
   let lastDbErrorMessage = '';
 
+  function getSalidaTransKey(s) {
+    if (!s) return '';
+    const sid = String(s.id || '');
+    if (sid && sid.startsWith('sal-')) {
+      const parts = sid.split('-');
+      if (parts.length >= 3) {
+        return `${parts[0]}-${parts[1]}`;
+      }
+    }
+    const fecha = String(s.fecha || '').trim();
+    if (fecha) {
+      return `${fecha}_${s.clienteId}_${s.membresiaId || ''}`;
+    }
+    return sid ? sid : `${s.clienteId}_${s.articuloId}`;
+  }
+
   function prorateHistoricalMembershipPrices() {
     if (!state.salidas || state.salidas.length === 0) return false;
 
@@ -336,7 +352,7 @@
 
     state.salidas.forEach(s => {
       if (s.tipoVenta === 'MEMBRESIA') {
-        const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+        const transKey = getSalidaTransKey(s);
         const cant = Number(s.cantidadBotellas) || 0;
         groupTotalBottles.set(transKey, (groupTotalBottles.get(transKey) || 0) + cant);
         if (s.membresiaId) {
@@ -349,7 +365,7 @@
 
     state.salidas.forEach(s => {
       if (s.tipoVenta === 'MEMBRESIA' && (s.precioUnitario === undefined || s.precioUnitario === null || Number(s.precioUnitario) === 0)) {
-        const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+        const transKey = getSalidaTransKey(s);
         const membId = s.membresiaId || groupMembresias.get(transKey);
         const memb = (state.membresias || []).find(m => String(m.id) === String(membId));
 
@@ -979,15 +995,12 @@
           tipo = 'Élite';
         }
 
-        const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+        const transKey = getSalidaTransKey(s);
 
         if (!processedMembresiaSales.has(transKey)) {
           let precioMemb = 0;
           if (pu > 0) {
-            const siblings = (state.salidas || []).filter(item => {
-              const itemKey = item.id ? item.id.split('-').slice(0, 3).join('-') : `${item.fecha}_${item.clienteId}_${item.membresiaId}`;
-              return itemKey === transKey;
-            });
+            const siblings = (state.salidas || []).filter(item => getSalidaTransKey(item) === transKey);
             precioMemb = siblings.reduce((sum, item) => sum + (Number(item.precioUnitario) || 0) * (Number(item.cantidadBotellas) || 0), 0);
             const totalBot = siblings.reduce((sum, item) => sum + (Number(item.cantidadBotellas) || 0), 0);
             processedMembresiaSales.set(transKey, { tipo, precio: precioMemb, botellas: totalBot });
@@ -1132,14 +1145,11 @@
         if (s.tipoVenta === 'BOTELLA') {
           cData.totalDinero += (pu * cantBot);
         } else if (s.tipoVenta === 'MEMBRESIA') {
-          const transKey = s.id ? s.id.split('-').slice(0, 3).join('-') : `${s.fecha}_${s.clienteId}_${s.membresiaId}`;
+          const transKey = getSalidaTransKey(s);
           if (!cData.transKeys.has(transKey)) {
             cData.transKeys.add(transKey);
             if (pu > 0) {
-              const siblings = (state.salidas || []).filter(item => {
-                const itemKey = item.id ? item.id.split('-').slice(0, 3).join('-') : `${item.fecha}_${item.clienteId}_${item.membresiaId}`;
-                return itemKey === transKey;
-              });
+              const siblings = (state.salidas || []).filter(item => getSalidaTransKey(item) === transKey);
               const deliveryTotal = siblings.reduce((sum, item) => sum + (Number(item.precioUnitario) || 0) * (Number(item.cantidadBotellas) || 0), 0);
               cData.totalDinero += deliveryTotal;
             } else {
