@@ -1249,13 +1249,25 @@
     const tbody = document.getElementById('tbody-membresias');
     const searchVal = (document.getElementById('search-membresias').value || '').toLowerCase();
     const tipoFilter = document.getElementById('filter-membresias-tipo') ? document.getElementById('filter-membresias-tipo').value : '';
+    const estadoFilter = document.getElementById('filter-membresias-estado') ? document.getElementById('filter-membresias-estado').value : 'vigente';
 
     const list = (state.membresias || []).filter(m => {
       const matchSearch = (m.tipo && m.tipo.toLowerCase().includes(searchVal)) ||
         m.codigo.toLowerCase().includes(searchVal) ||
         m.descripcion.toLowerCase().includes(searchVal);
       const matchTipo = !tipoFilter || (m.tipo && m.tipo.toLowerCase().includes(tipoFilter.toLowerCase()));
-      return matchSearch && matchTipo;
+      
+      const isVigente = isMembresiaVigente(m);
+      let matchEstado = true;
+      if (estadoFilter === 'vigente') {
+        matchEstado = isVigente;
+      } else if (estadoFilter === 'vencida') {
+        matchEstado = !isVigente;
+      } else if (estadoFilter === 'todas') {
+        matchEstado = true;
+      }
+
+      return matchSearch && matchTipo && matchEstado;
     });
 
     if (list.length === 0) {
@@ -3862,7 +3874,7 @@
   // Debounced search input filters (150ms delay)
   let searchDebounceTimeout = null;
   [
-    'search-membresias', 'filter-membresias-tipo',
+    'search-membresias', 'filter-membresias-tipo', 'filter-membresias-estado',
     'search-proveedores',
     'search-clientes', 'filter-clientes-provincia', 'filter-clientes-membresia',
     'search-articulos', 'filter-articulos-proveedor', 'filter-articulos-costo-min', 'filter-articulos-costo-max',
@@ -3922,22 +3934,29 @@
 
     if (moduleName === 'membresias') {
       title = 'Reporte de Membresías';
-      headers = ['Tipo', 'Código', 'Descripción', 'Botellas Incluidas', 'Vigencia', 'Precio ($)'];
+      headers = ['Tipo', 'Código', 'Descripción', 'Botellas Incluidas', 'Vigencia', 'Estado', 'Precio ($)'];
       const searchVal = (document.getElementById('search-membresias').value || '').toLowerCase();
       const tipoFilter = document.getElementById('filter-membresias-tipo') ? document.getElementById('filter-membresias-tipo').value : '';
+      const estadoFilter = document.getElementById('filter-membresias-estado') ? document.getElementById('filter-membresias-estado').value : 'vigente';
       const list = (state.membresias || []).filter(m => {
         const matchSearch = (m.tipo && m.tipo.toLowerCase().includes(searchVal)) || m.codigo.toLowerCase().includes(searchVal) || m.descripcion.toLowerCase().includes(searchVal);
         const matchTipo = !tipoFilter || (m.tipo && m.tipo.toLowerCase().includes(tipoFilter.toLowerCase()));
-        return matchSearch && matchTipo;
+        const isVig = isMembresiaVigente(m);
+        let matchEstado = true;
+        if (estadoFilter === 'vigente') matchEstado = isVig;
+        else if (estadoFilter === 'vencida') matchEstado = !isVig;
+        return matchSearch && matchTipo && matchEstado;
       });
       rows = list.map(m => {
         const calc = getMembresiaCalculations(m);
+        const isVig = isMembresiaVigente(m);
         return [
           m.tipo || 'Selección',
           m.codigo,
           m.descripcion,
           `${calc.totalBotellas} bot.`,
           `${m.fechaDesde} a ${m.fechaHasta}`,
+          isVig ? 'Vigente' : 'Vencida',
           formatCurrency(m.precio || 0)
         ];
       });

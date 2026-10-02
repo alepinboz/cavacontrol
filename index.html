@@ -277,6 +277,11 @@
                 <option value="Élite">Membresía Élite</option>
                 <option value="Selección">Membresía Selección</option>
               </select>
+              <select id="filter-membresias-estado" class="form-control" style="width:auto; padding:0.4rem 0.8rem;">
+                <option value="vigente" selected>Vigente</option>
+                <option value="vencida">Vencida</option>
+                <option value="todas">Todas</option>
+              </select>
               <button class="btn btn-ghost" onclick="window.exportModuleData('membresias', 'excel')" title="Exportar Membresías a Excel (CSV)">
                 <i data-lucide="file-spreadsheet"></i> Excel
               </button>
