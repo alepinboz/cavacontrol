@@ -935,10 +935,10 @@
     const cliMembSelect = document.getElementById('filter-clientes-membresia');
     if (cliMembSelect) {
       const currentVal = cliMembSelect.value;
-      const options = `<option value="">-- Todas las Membresías --</option>
-        <option value="SIN_MEMBRESIA" ${currentVal === 'SIN_MEMBRESIA' ? 'selected' : ''}>Sin Membresía</option>
-        <option value="CON_MEMBRESIA" ${currentVal === 'CON_MEMBRESIA' ? 'selected' : ''}>Con Cualquier Membresía</option>` +
-        sortedMembs.map(m => `<option value="${m.id}" ${String(m.id) === String(currentVal) ? 'selected' : ''}>[${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion}</option>`).join('');
+      let options = `<option value="">-- Todas las Membresías --</option>
+        <option value="sin" ${currentVal === 'sin' ? 'selected' : ''}>Sin Membresía</option>
+        <option value="elite" ${currentVal === 'elite' ? 'selected' : ''}>Membresía Élite</option>
+        <option value="seleccion" ${currentVal === 'seleccion' ? 'selected' : ''}>Membresía Selección</option>`;
       cliMembSelect.innerHTML = options;
     }
   }
@@ -1352,12 +1352,20 @@
 
       const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
       let matchMembresia = true;
-      if (membresiaFilter === 'elite') {
-        matchMembresia = memb && (memb.tipo === 'Élite' || (memb.codigo && memb.codigo.toUpperCase().includes('ELI')));
+      if (membresiaFilter === 'sin') {
+        matchMembresia = !c.membresiaId || !memb;
+      } else if (membresiaFilter === 'elite') {
+        matchMembresia = memb && (
+          (memb.tipo && (memb.tipo.toLowerCase().includes('élit') || memb.tipo.toLowerCase().includes('elit'))) ||
+          (memb.codigo && memb.codigo.toUpperCase().includes('ELI'))
+        );
       } else if (membresiaFilter === 'seleccion') {
-        matchMembresia = memb && (memb.tipo === 'Selección' || (!memb.tipo && !memb.codigo.toUpperCase().includes('ELI')));
-      } else if (membresiaFilter === 'sin') {
-        matchMembresia = !memb;
+        matchMembresia = memb && (
+          (memb.tipo && (memb.tipo.toLowerCase().includes('selecc') || memb.tipo.toLowerCase().includes('selecc'))) ||
+          (!memb.tipo && (!memb.codigo || !memb.codigo.toUpperCase().includes('ELI')))
+        );
+      } else if (membresiaFilter) {
+        matchMembresia = memb && memb.tipo && memb.tipo.toLowerCase() === membresiaFilter.toLowerCase();
       }
 
       return matchSearch && matchProvincia && matchMembresia;
@@ -3955,9 +3963,21 @@
         const matchProvincia = !provinciaFilter || (c.provincia && c.provincia.toLowerCase() === provinciaFilter.toLowerCase());
         const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
         let matchMembresia = true;
-        if (membresiaFilter === 'elite') matchMembresia = memb && (memb.tipo === 'Élite' || (memb.codigo && memb.codigo.toUpperCase().includes('ELI')));
-        else if (membresiaFilter === 'seleccion') matchMembresia = memb && (memb.tipo === 'Selección' || (!memb.tipo && !memb.codigo.toUpperCase().includes('ELI')));
-        else if (membresiaFilter === 'sin') matchMembresia = !memb;
+        if (membresiaFilter === 'sin') {
+          matchMembresia = !c.membresiaId || !memb;
+        } else if (membresiaFilter === 'elite') {
+          matchMembresia = memb && (
+            (memb.tipo && (memb.tipo.toLowerCase().includes('élit') || memb.tipo.toLowerCase().includes('elit'))) ||
+            (memb.codigo && memb.codigo.toUpperCase().includes('ELI'))
+          );
+        } else if (membresiaFilter === 'seleccion') {
+          matchMembresia = memb && (
+            (memb.tipo && (memb.tipo.toLowerCase().includes('selecc') || memb.tipo.toLowerCase().includes('selecc'))) ||
+            (!memb.tipo && (!memb.codigo || !memb.codigo.toUpperCase().includes('ELI')))
+          );
+        } else if (membresiaFilter) {
+          matchMembresia = memb && memb.tipo && memb.tipo.toLowerCase() === membresiaFilter.toLowerCase();
+        }
         return matchSearch && matchProvincia && matchMembresia;
       });
       rows = list.map(c => {
