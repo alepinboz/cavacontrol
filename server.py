@@ -157,6 +157,8 @@ def init_postgres_tables_if_needed():
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS costo_total_fifo DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS ganancia_nominal DOUBLE PRECISION DEFAULT 0;
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS lotes_detalle TEXT;
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS pagado BOOLEAN DEFAULT TRUE;
+        ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS entregado BOOLEAN DEFAULT TRUE;
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'Admin';
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS fecha_creacion VARCHAR(50);
         ALTER TABLE Articulos ADD COLUMN IF NOT EXISTS no_reponer BOOLEAN DEFAULT FALSE;
@@ -425,7 +427,7 @@ def get_full_state():
         } for r in cursor.fetchall()]
 
         # Salidas
-        db_execute(cursor, "SELECT id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle, precio_unitario, precio_venta_publico, precio_venta_club, costo_total_fifo, ganancia_nominal, lotes_detalle FROM Salidas")
+        db_execute(cursor, "SELECT id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle, precio_unitario, precio_venta_publico, precio_venta_club, costo_total_fifo, ganancia_nominal, lotes_detalle, pagado, entregado FROM Salidas")
         salidas = [{
             "id": str(r[0]), "fecha": str(r[1] or ''), "clienteId": str(r[2]), "tipoVenta": str(r[3]),
             "articuloId": str(r[4]), "membresiaId": str(r[5] or ''), "cantidadBotellas": int(r[6]), "detalle": str(r[7] or ''),
@@ -434,7 +436,9 @@ def get_full_state():
             "precioVentaClub": float(r[10] or 0) if len(r) > 10 and r[10] is not None else 0.0,
             "costoTotalFifo": float(r[11] or 0) if len(r) > 11 and r[11] is not None else 0.0,
             "gananciaNominal": float(r[12] or 0) if len(r) > 12 and r[12] is not None else 0.0,
-            "lotesDetalle": str(r[13] or '') if len(r) > 13 and r[13] is not None else ''
+            "lotesDetalle": str(r[13] or '') if len(r) > 13 and r[13] is not None else '',
+            "pagado": bool(r[14]) if len(r) > 14 and r[14] is not None else True,
+            "entregado": bool(r[15]) if len(r) > 15 and r[15] is not None else True
         } for r in cursor.fetchall()]
 
         # AuditoriaLogs
@@ -640,11 +644,13 @@ def sync_full_state():
             safe_float(s.get('precioVentaClub'), 0.0),
             safe_float(s.get('costoTotalFifo'), 0.0),
             safe_float(s.get('gananciaNominal'), 0.0),
-            safe_str(json.dumps(s.get('lotesDetalle')) if isinstance(s.get('lotesDetalle'), (list, dict)) else s.get('lotesDetalle', ''))
+            safe_str(json.dumps(s.get('lotesDetalle')) if isinstance(s.get('lotesDetalle'), (list, dict)) else s.get('lotesDetalle', '')),
+            bool(s.get('pagado', True)) if s.get('pagado') is not None else True,
+            bool(s.get('entregado', True)) if s.get('entregado') is not None else True
         ) for s in data.get('salidas', []) if s.get('id')]
         sal_rows = deduplicate_rows_by_id(sal_rows)
         if sal_rows:
-            db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle, precio_unitario, precio_venta_publico, precio_venta_club, costo_total_fifo, ganancia_nominal, lotes_detalle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
+            db_executemany(cursor, "INSERT INTO Salidas (id, fecha, cliente_id, tipo_venta, articulo_id, membresia_id, cantidad_botellas, detalle, precio_unitario, precio_venta_publico, precio_venta_club, costo_total_fifo, ganancia_nominal, lotes_detalle, pagado, entregado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", sal_rows)
 
         # 7. AuditoriaLogs Bulk Insert
         audit_rows = [(

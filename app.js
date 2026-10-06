@@ -1650,20 +1650,173 @@
     document.getElementById('stock-total-val').textContent = formatCurrency(totalValuation);
   }
 
+  function renderSalidasPendientes() {
+    const tbody = document.getElementById('tbody-salidas-pendientes');
+    const badgeCount = document.getElementById('badge-pendientes-count');
+    if (!tbody) return;
+
+    const pendingSalidas = (state.salidas || []).filter(s => s.pagado === false || s.entregado === false);
+
+    const groupsMap = new Map();
+    pendingSalidas.forEach(s => {
+      const transKey = getSalidaTransKey(s);
+      if (!groupsMap.has(transKey)) {
+        groupsMap.set(transKey, []);
+      }
+      groupsMap.get(transKey).push(s);
+    });
+
+    if (badgeCount) {
+      badgeCount.textContent = groupsMap.size;
+    }
+
+    if (groupsMap.size === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:1.2rem;">✨ No hay salidas pendientes de pago ni entrega. Todas las ventas están completadas.</td></tr>`;
+      return;
+    }
+
+    let html = '';
+    groupsMap.forEach((items, transKey) => {
+      const first = items[0];
+      const cli = state.clientes.find(c => String(c.id) === String(first.clienteId));
+      const cliName = cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A';
+
+      let membName = first.detalle || 'Venta de Vino';
+      if (first.membresiaId) {
+        const memb = state.membresias.find(m => String(m.id) === String(first.membresiaId));
+        if (memb) {
+          membName = `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion}`;
+        }
+      } else if (first.tipoVenta === 'BOTELLA') {
+        membName = 'Venta por Botella';
+      }
+
+      const isPagado = items.every(i => i.pagado !== false);
+      const isEntregado = items.every(i => i.entregado !== false);
+
+      const itemsDetail = items.map(i => {
+        const art = state.articulos.find(a => String(a.id) === String(i.articuloId));
+        const artLabel = art ? `${art.bodega} ${art.etiqueta}` : 'Vino';
+        return `${i.cantidadBotellas}x ${artLabel}`;
+      }).join(', ');
+
+      const totalBot = items.reduce((sum, i) => sum + (Number(i.cantidadBotellas) || 0), 0);
+
+      const pagoBadge = isPagado
+        ? `<span class="badge badge-success">💰 PAGADO</span>`
+        : `<span class="badge badge-warning">⏳ PENDIENTE PAGO</span>`;
+
+      const entregaBadge = isEntregado
+        ? `<span class="badge badge-success">📦 ENTREGADO</span>`
+        : `<span class="badge badge-danger">🚚 PENDIENTE ENTREGA</span>`;
+
+      let actionButtons = '';
+      if (!isPagado && !isEntregado) {
+        actionButtons = `
+          <button class="btn btn-sm btn-success" onclick="window.marcarSalidaTransAccion('${transKey}', 'pago')" title="Marcar como Pagado"><i data-lucide="dollar-sign"></i> Pagado</button>
+          <button class="btn btn-sm btn-info" onclick="window.marcarSalidaTransAccion('${transKey}', 'entrega')" title="Marcar como Entregado"><i data-lucide="package-check"></i> Entregado</button>
+          <button class="btn btn-sm btn-primary" onclick="window.marcarSalidaTransAccion('${transKey}', 'ambos')" title="Marcar Pagado y Entregado"><i data-lucide="check-check"></i> Ambos</button>
+        `;
+      } else if (!isPagado) {
+        actionButtons = `
+          <button class="btn btn-sm btn-success" onclick="window.marcarSalidaTransAccion('${transKey}', 'pago')" title="Marcar como Pagado"><i data-lucide="dollar-sign"></i> Marcar Pagado</button>
+        `;
+      } else if (!isEntregado) {
+        actionButtons = `
+          <button class="btn btn-sm btn-info" onclick="window.marcarSalidaTransAccion('${transKey}', 'entrega')" title="Marcar como Entregado"><i data-lucide="package-check"></i> Marcar Entregado</button>
+        `;
+      }
+
+      actionButtons += `
+        <button class="btn btn-ghost btn-sm text-danger btn-icon" onclick="window.deleteSalidaTrans('${transKey}')" title="Eliminar Venta Pendiente"><i data-lucide="trash-2"></i></button>
+      `;
+
+      html += `
+        <tr>
+          <td><strong>${cliName}</strong></td>
+          <td><span class="badge badge-info">${membName}</span></td>
+          <td class="text-muted"><small>${first.fecha}</small></td>
+          <td><small style="color:var(--text-muted)">${itemsDetail} (${totalBot} bot.)</small></td>
+          <td>${pagoBadge}</td>
+          <td>${entregaBadge}</td>
+          <td><div style="display:flex; gap:0.3rem; flex-wrap:wrap;">${actionButtons}</div></td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = html;
+  }
+
+  window.marcarSalidaTransAccion = function (transKey, action) {
+    const items = (state.salidas || []).filter(s => getSalidaTransKey(s) === transKey);
+    if (items.length === 0) return;
+
+    const first = items[0];
+    const cli = state.clientes.find(c => String(c.id) === String(first.clienteId));
+    const cliName = cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente';
+
+    if (action === 'pago') {
+      items.forEach(i => { i.pagado = true; });
+      logAuditoria('Salidas', 'Marcado de Pago', `Se registró el pago de la venta para ${cliName}`);
+      showToast(`Pago registrado para la venta de ${cliName}.`, 'success');
+    } else if (action === 'entrega') {
+      items.forEach(i => { i.entregado = true; });
+      logAuditoria('Salidas', 'Marcado de Entrega', `Se registró la entrega de la venta para ${cliName}`);
+      showToast(`Entrega registrada para la venta de ${cliName}.`, 'success');
+    } else if (action === 'ambos') {
+      items.forEach(i => { i.pagado = true; i.entregado = true; });
+      logAuditoria('Salidas', 'Marcado de Pago y Entrega', `Se completó la venta (Pagado y Entregado) para ${cliName}`);
+      showToast(`Venta completada (Pagada y Entregada) para ${cliName}.`, 'success');
+    }
+
+    saveState();
+    renderAllViews();
+  };
+
+  window.deleteSalidaTrans = function (transKey) {
+    const items = (state.salidas || []).filter(s => getSalidaTransKey(s) === transKey);
+    if (items.length === 0) return;
+
+    const first = items[0];
+    const cli = state.clientes.find(c => String(c.id) === String(first.clienteId));
+    const cliName = cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente';
+
+    if (confirm(`¿Desea eliminar esta venta de ${cliName}? El stock correspondiente se restaurará a la cava.`)) {
+      state.salidas = (state.salidas || []).filter(s => getSalidaTransKey(s) !== transKey);
+      logAuditoria('Salidas', 'Eliminación de Venta', `Se anuló la venta de ${cliName} y se restauró el stock`);
+      saveState();
+      renderAllViews();
+      showToast('Venta eliminada. Stock restaurado.', 'success');
+    }
+  };
+
   // 8. SALIDAS
   function renderSalidas() {
+    renderSalidasPendientes();
+
     const tbody = document.getElementById('tbody-salidas');
     if (!tbody) return;
 
     const searchVal = (document.getElementById('search-salidas').value || '').toLowerCase();
     const clienteFilter = document.getElementById('filter-salidas-cliente') ? document.getElementById('filter-salidas-cliente').value : '';
     const tipoFilter = document.getElementById('filter-salidas-tipo') ? document.getElementById('filter-salidas-tipo').value : '';
+    const estadoFilter = document.getElementById('filter-salidas-estado') ? document.getElementById('filter-salidas-estado').value : 'completadas';
     const membresiaFilter = document.getElementById('filter-salidas-membresia') ? document.getElementById('filter-salidas-membresia').value : '';
     const desdeFilter = document.getElementById('filter-salidas-desde') ? document.getElementById('filter-salidas-desde').value : '';
     const hastaFilter = document.getElementById('filter-salidas-hasta') ? document.getElementById('filter-salidas-hasta').value : '';
     const sortBy = document.getElementById('sort-salidas-by') ? document.getElementById('sort-salidas-by').value : 'fecha_desc';
 
     const list = (state.salidas || []).filter(s => {
+      const isCompleted = s.pagado !== false && s.entregado !== false;
+      let matchEstado = true;
+      if (estadoFilter === 'completadas') {
+        matchEstado = isCompleted;
+      } else if (estadoFilter === 'pendientes') {
+        matchEstado = !isCompleted;
+      } else if (estadoFilter === 'todas') {
+        matchEstado = true;
+      }
+
       const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
       const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
       const cliName = cli ? `${cli.nombre} ${cli.apellido}`.toLowerCase() : '';
@@ -1679,7 +1832,7 @@
       const matchDesde = !desdeFilter || (sDateStr && sDateStr >= desdeFilter);
       const matchHasta = !hastaFilter || (sDateStr && sDateStr <= hastaFilter);
 
-      return matchSearch && matchCliente && matchTipo && matchMembresia && matchDesde && matchHasta;
+      return matchEstado && matchSearch && matchCliente && matchTipo && matchMembresia && matchDesde && matchHasta;
     });
 
     list.sort((a, b) => {
@@ -2906,6 +3059,25 @@
           </div>
         </div>
 
+        <div style="margin-top: 1rem; margin-bottom: 1rem; padding: 0.8rem 1rem; background: rgba(0,0,0,0.25); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+          <label style="font-weight: 600; font-size: 0.85rem; color: var(--gold-accent); display: block; margin-bottom: 0.5rem;">
+            <i data-lucide="check-square"></i> Estado de Pago y Entrega:
+          </label>
+          <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+            <label class="checkbox-label" style="font-weight: 500; cursor: pointer;">
+              <input type="checkbox" id="sal-pagado" checked>
+              <span>💰 <strong>PAGADO</strong> (Abonó la venta)</span>
+            </label>
+            <label class="checkbox-label" style="font-weight: 500; cursor: pointer;">
+              <input type="checkbox" id="sal-entregado" checked>
+              <span>📦 <strong>ENTREGADO</strong> (Retiró/recibió botellas)</span>
+            </label>
+          </div>
+          <small class="text-muted" style="display:block; margin-top:0.4rem; font-size:0.75rem;">
+            * Si desmarcás alguno, el stock se descontará inmediatamente y la venta quedará guardada en <strong>Salidas Pendientes</strong>.
+          </small>
+        </div>
+
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" onclick="window.closeModal()">Cancelar</button>
           <button type="submit" class="btn btn-primary">Registrar Venta / Descontar Stock</button>
@@ -3086,6 +3258,9 @@
         return;
       }
 
+      const isPagado = document.getElementById('sal-pagado') ? document.getElementById('sal-pagado').checked : true;
+      const isEntregado = document.getElementById('sal-entregado') ? document.getElementById('sal-entregado').checked : true;
+
       if (tipoVenta === 'BOTELLA') {
         const articuloId = artSelect.value;
         const cantidadBotellas = parseInt(document.getElementById('sal-cantidad').value, 10) || 0;
@@ -3125,12 +3300,18 @@
           precioVentaClub: pClub,
           costoTotalFifo: fifo.costoTotalFifo,
           gananciaNominal: fifo.gananciaNominal,
-          lotesDetalle: fifo.lotesDetalle
+          lotesDetalle: fifo.lotesDetalle,
+          pagado: isPagado,
+          entregado: isEntregado
         });
 
-        logAuditoria('Salidas', 'Venta por Botella', `Venta de ${cantidadBotellas} botellas de ${art ? art.bodega + ' ' + art.etiqueta : 'Vino'} a cliente ${cli ? cli.nombre + ' ' + cli.apellido : 'Cliente'}`);
+        logAuditoria('Salidas', 'Venta por Botella', `Venta de ${cantidadBotellas} botellas a cliente ${cli ? cli.nombre + ' ' + cli.apellido : 'Cliente'}`);
 
-        showToast(`Venta por botella registrada. ${cantidadBotellas} botellas descontadas del stock.`, 'success');
+        if (!isPagado || !isEntregado) {
+          showToast(`Venta registrada. ${cantidadBotellas} botellas descontadas del stock (En Salidas Pendientes).`, 'info');
+        } else {
+          showToast(`Venta por botella registrada. ${cantidadBotellas} botellas descontadas del stock.`, 'success');
+        }
 
       } else {
         const membresiaId = membSelect.value;
@@ -3170,13 +3351,19 @@
             detalle: `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion}`,
             costoTotalFifo: fifo.costoTotalFifo,
             gananciaNominal: fifo.gananciaNominal,
-            lotesDetalle: fifo.lotesDetalle
+            lotesDetalle: fifo.lotesDetalle,
+            pagado: isPagado,
+            entregado: isEntregado
           });
         });
 
         logAuditoria('Salidas', 'Venta por Membresía', `Venta de Membresía ${memb.tipo} ${memb.codigo} (${calc.totalBotellas} botellas) a cliente ${cli ? cli.nombre + ' ' + cli.apellido : 'Cliente'}`);
 
-        showToast(`Venta por Membresía registrada. ${calc.totalBotellas} botellas entregadas y descontadas!`, 'success');
+        if (!isPagado || !isEntregado) {
+          showToast(`Venta por Membresía registrada. ${calc.totalBotellas} botellas descontadas del stock (En Salidas Pendientes).`, 'info');
+        } else {
+          showToast(`Venta por Membresía registrada. ${calc.totalBotellas} botellas descontadas del stock!`, 'success');
+        }
       }
 
       saveState();
@@ -3880,7 +4067,7 @@
     'search-articulos', 'filter-articulos-proveedor', 'filter-articulos-costo-min', 'filter-articulos-costo-max',
     'search-entradas', 'filter-entradas-proveedor', 'filter-entradas-desde', 'filter-entradas-hasta', 'sort-entradas-by',
     'search-stock', 'filter-stock-estado', 'filter-stock-costo-min', 'filter-stock-costo-max',
-    'search-salidas', 'filter-salidas-cliente', 'filter-salidas-tipo', 'filter-salidas-membresia', 'filter-salidas-desde', 'filter-salidas-hasta', 'sort-salidas-by',
+    'search-salidas', 'filter-salidas-cliente', 'filter-salidas-tipo', 'filter-salidas-estado', 'filter-salidas-membresia', 'filter-salidas-desde', 'filter-salidas-hasta', 'sort-salidas-by',
     'search-auditoria', 'filter-auditoria-modulo'
   ].forEach(id => {
     const el = document.getElementById(id);
@@ -3915,6 +4102,7 @@
       document.getElementById('search-salidas').value = '';
       const c = document.getElementById('filter-salidas-cliente'); if (c) c.value = '';
       const t = document.getElementById('filter-salidas-tipo'); if (t) t.value = '';
+      const e = document.getElementById('filter-salidas-estado'); if (e) e.value = 'completadas';
       const m = document.getElementById('filter-salidas-membresia'); if (m) m.value = '';
       const d = document.getElementById('filter-salidas-desde'); if (d) d.value = '';
       const h = document.getElementById('filter-salidas-hasta'); if (h) h.value = '';

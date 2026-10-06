@@ -633,6 +633,35 @@
             </div>
           </div>
 
+          <!-- SUBPANEL SALIDAS PENDIENTES (PAGO / ENTREGA) -->
+          <div id="card-salidas-pendientes" class="card shadow-sm" style="margin-bottom: 1.5rem; border: 1px solid var(--gold-accent);">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; background: rgba(212, 175, 55, 0.08); padding: 0.75rem 1rem;">
+              <h3 style="margin:0; font-size:1.05rem; display:flex; align-items:center; gap:0.5rem; color: var(--gold-accent);">
+                <i data-lucide="clock"></i> Salidas Pendientes (Pago / Entrega)
+                <span id="badge-pendientes-count" class="badge badge-warning" style="font-size:0.8rem; margin-left:0.3rem;">0</span>
+              </h3>
+              <small class="text-muted">Descontadas del stock. Agrupadas por cliente y membresía vendida.</small>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Membresía / Venta</th>
+                    <th>Fecha Carga</th>
+                    <th>Vinos Incluidos</th>
+                    <th>Estado Pago</th>
+                    <th>Estado Entrega</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-salidas-pendientes">
+                  <!-- Dynamic JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="filter-bar">
             <div class="filter-group">
               <label><i data-lucide="user"></i> Cliente:</label>
@@ -646,6 +675,14 @@
                 <option value="">Todos los Tipos</option>
                 <option value="BOTELLA">Venta por Botella</option>
                 <option value="MEMBRESIA">Venta por Membresía</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label><i data-lucide="check-circle-2"></i> Estado Venta:</label>
+              <select id="filter-salidas-estado">
+                <option value="completadas" selected>Solo Completadas (Pagadas y Entregadas)</option>
+                <option value="todas">Todas las Salidas (Completadas y Pendientes)</option>
+                <option value="pendientes">Solo Pendientes</option>
               </select>
             </div>
             <div class="filter-group">
