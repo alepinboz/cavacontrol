@@ -1769,7 +1769,7 @@
       showToast(`Venta completada (Pagada y Entregada) para ${cliName}.`, 'success');
     }
 
-    saveState();
+    saveState(true);
     renderAllViews();
   };
 
@@ -4049,6 +4049,12 @@
 
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      loadState();
+    }
   });
 
   document.getElementById('btn-add-proveedor').addEventListener('click', () => window.openProveedorForm());
