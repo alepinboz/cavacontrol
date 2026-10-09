@@ -1277,7 +1277,7 @@
       }
 
       if (birthdayList.length === 0) {
-        birthdaysTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:1.2rem;">🎈 No hay cumpleaños registrados para el mes de ${monthNames[currentMonth]}</td></tr>`;
+        birthdaysTbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted" style="padding:1.2rem;">🎈 No hay cumpleaños registrados para el mes de ${monthNames[currentMonth]}</td></tr>`;
       } else {
         let html = '';
         birthdayList.forEach(item => {
@@ -1292,22 +1292,20 @@
 
           let estadoBadge = '';
           if (isToday) {
-            estadoBadge = `<span class="badge badge-warning" style="font-weight:bold; background:gold; color:#000; font-size:0.85rem;">🎉 ¡HOY ES SU CUMPLEAÑOS! ${age ? '(' + age + ' años)' : ''}</span>`;
+            estadoBadge = `<span class="badge badge-warning" style="font-weight:bold; background:gold; color:#000; font-size:0.8rem;">🎉 ¡HOY! ${age ? '(' + age + 'a)' : ''}</span>`;
           } else if (b.day > currentDay) {
             const daysLeft = b.day - currentDay;
-            estadoBadge = `<span class="badge badge-info">Faltan ${daysLeft} día${daysLeft > 1 ? 's' : ''} ${age ? '(Cumple ' + age + ')' : ''}</span>`;
+            estadoBadge = `<span class="badge badge-info">Faltan ${daysLeft}d ${age ? '(' + age + 'a)' : ''}</span>`;
           } else {
-            estadoBadge = `<span class="text-muted" style="font-size:0.85rem;">Cumplió el ${b.day}/${currentMonth + 1} ${age ? '(' + age + ' años)' : ''}</span>`;
+            estadoBadge = `<span class="text-muted" style="font-size:0.8rem;">Cumplió ${age ? '(' + age + 'a)' : ''}</span>`;
           }
 
-          const rawDateStr = b.year ? `${String(b.day).padStart(2,'0')}/${String(b.month + 1).padStart(2,'0')}/${b.year}` : `${String(b.day).padStart(2,'0')}/${String(b.month + 1).padStart(2,'0')}`;
+          const contactoDisp = c.contacto || c.telefono || '-';
 
           html += `
             <tr style="${isToday ? 'background: rgba(255, 215, 0, 0.08);' : ''}">
               <td><strong>${c.nombre} ${c.apellido}</strong></td>
-              <td>${c.telefono || '-'}</td>
-              <td>${c.contacto || '-'}</td>
-              <td><small>${rawDateStr}</small></td>
+              <td><small>${contactoDisp}</small></td>
               <td><strong class="text-gold">${b.day} de ${monthNames[currentMonth]}</strong></td>
               <td>${estadoBadge}</td>
             </tr>
