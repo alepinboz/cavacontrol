@@ -970,6 +970,208 @@
     renderView(activeTabId);
   }
 
+  window.activeDashTab = 'operacion';
+
+  window.switchDashTab = function (tabId) {
+    window.activeDashTab = tabId;
+    const btnOp = document.getElementById('btn-dash-tab-operacion');
+    const btnEv = document.getElementById('btn-dash-tab-evolucion');
+    const subOp = document.getElementById('dash-subtab-operacion');
+    const subEv = document.getElementById('dash-subtab-evolucion');
+
+    if (tabId === 'evolucion') {
+      if (btnOp) {
+        btnOp.style.borderBottom = 'none';
+        btnOp.style.color = 'var(--text-muted)';
+        btnOp.style.fontWeight = 'normal';
+      }
+      if (btnEv) {
+        btnEv.style.borderBottom = '2px solid var(--gold-accent)';
+        btnEv.style.color = 'var(--gold-accent)';
+        btnEv.style.fontWeight = '600';
+      }
+      if (subOp) subOp.style.display = 'none';
+      if (subEv) subEv.style.display = 'block';
+      renderMonthlyEvolutionChart();
+    } else {
+      if (btnEv) {
+        btnEv.style.borderBottom = 'none';
+        btnEv.style.color = 'var(--text-muted)';
+        btnEv.style.fontWeight = 'normal';
+      }
+      if (btnOp) {
+        btnOp.style.borderBottom = '2px solid var(--gold-accent)';
+        btnOp.style.color = 'var(--gold-accent)';
+        btnOp.style.fontWeight = '600';
+      }
+      if (subEv) subEv.style.display = 'none';
+      if (subOp) subOp.style.display = 'block';
+    }
+    if (window.lucide) window.lucide.createIcons();
+  };
+
+  function getMonthlyEvolutionData() {
+    const monthsMap = new Map();
+    const pad = n => String(n).padStart(2, '0');
+    const now = new Date();
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+      const monthName = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      const formattedName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+      monthsMap.set(key, {
+        key,
+        name: formattedName,
+        isCurrent: i === 0,
+        membElite: 0,
+        membSeleccion: 0,
+        ventasBotella: 0,
+        gananciaNominal: 0,
+        botellasTotal: 0,
+        transKeys: new Set()
+      });
+    }
+
+    (state.salidas || []).forEach(s => {
+      if (!s.fecha) return;
+      const dateStr = String(s.fecha).split('T')[0].split(' ')[0];
+      const key = dateStr.substring(0, 7);
+
+      if (!monthsMap.has(key)) {
+        const parts = key.split('-');
+        if (parts.length === 2) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          if (!isNaN(y) && !isNaN(m)) {
+            const d = new Date(y, m, 1);
+            const monthName = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            const formattedName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+            monthsMap.set(key, {
+              key,
+              name: formattedName,
+              isCurrent: key === `${now.getFullYear()}-${pad(now.getMonth() + 1)}`,
+              membElite: 0,
+              membSeleccion: 0,
+              ventasBotella: 0,
+              gananciaNominal: 0,
+              botellasTotal: 0,
+              transKeys: new Set()
+            });
+          }
+        }
+      }
+
+      const mData = monthsMap.get(key);
+      if (!mData) return;
+
+      const cantBot = Number(s.cantidadBotellas) || 0;
+      const pu = Number(s.precioUnitario) || 0;
+      mData.botellasTotal += cantBot;
+
+      let g = Number(s.gananciaNominal);
+      if (s.gananciaNominal === undefined || s.gananciaNominal === null || isNaN(g)) {
+        const fifo = calculateFifoConsumption(s.articuloId, cantBot, pu, s.id);
+        g = fifo.gananciaNominal;
+      }
+      mData.gananciaNominal += (g || 0);
+
+      if (s.tipoVenta === 'BOTELLA') {
+        mData.ventasBotella += (pu * cantBot);
+      } else if (s.tipoVenta === 'MEMBRESIA') {
+        const memb = (state.membresias || []).find(m => String(m.id) === String(s.membresiaId));
+        let tipo = 'Selección';
+        if (memb && memb.tipo) {
+          tipo = memb.tipo;
+        } else if (s.detalle && s.detalle.toUpperCase().includes('ELITE')) {
+          tipo = 'Élite';
+        }
+
+        const transKey = getSalidaTransKey(s);
+        if (!mData.transKeys.has(transKey)) {
+          mData.transKeys.add(transKey);
+          let precioMemb = 0;
+          if (pu > 0) {
+            const siblings = (state.salidas || []).filter(item => getSalidaTransKey(item) === transKey);
+            precioMemb = siblings.reduce((sum, item) => sum + (Number(item.precioUnitario) || 0) * (Number(item.cantidadBotellas) || 0), 0);
+          } else {
+            precioMemb = memb ? (Number(memb.precio) || 0) : 0;
+          }
+
+          const isElite = tipo.toLowerCase().includes('élite') || tipo.toLowerCase().includes('elite');
+          if (isElite) {
+            mData.membElite += precioMemb;
+          } else {
+            mData.membSeleccion += precioMemb;
+          }
+        }
+      }
+    });
+
+    return Array.from(monthsMap.values()).sort((a, b) => a.key.localeCompare(b.key));
+  }
+
+  function renderMonthlyEvolutionChart() {
+    const chartContainer = document.getElementById('dash-monthly-chart-container');
+    const tbodyDetail = document.getElementById('tbody-dash-monthly-detail');
+
+    const monthlyData = getMonthlyEvolutionData();
+    if (monthlyData.length === 0) return;
+
+    let maxVal = 0;
+    monthlyData.forEach(m => {
+      const total = m.membElite + m.membSeleccion + m.ventasBotella;
+      if (total > maxVal) maxVal = total;
+      if (m.gananciaNominal > maxVal) maxVal = m.gananciaNominal;
+    });
+    if (maxVal === 0) maxVal = 1;
+
+    let chartHtml = `
+      <div style="min-width:650px; height:240px; display:flex; align-items:flex-end; justify-content:space-between; gap:1.2rem; padding:1.5rem 1rem 0.5rem 1rem; border-bottom:1px solid var(--border-color);">
+    `;
+
+    monthlyData.forEach(m => {
+      const totalMemb = m.membElite + m.membSeleccion;
+      const hMemb = Math.max(8, Math.round((totalMemb / maxVal) * 160));
+      const hBot = Math.max(8, Math.round((m.ventasBotella / maxVal) * 160));
+      const hGan = Math.max(8, Math.round((m.gananciaNominal / maxVal) * 160));
+      const totalFact = totalMemb + m.ventasBotella;
+
+      chartHtml += `
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:0.5rem; ${m.isCurrent ? 'background:rgba(212,175,55,0.06); padding:0.4rem; border-radius:var(--radius-md) var(--radius-md) 0 0; border-top:2px solid var(--gold-accent);' : ''}">
+          <div style="width:100%; height:170px; display:flex; align-items:flex-end; justify-content:center; gap:0.35rem;" title="${m.name}: Facturado ${formatCurrency(totalFact)} | Ganancia PEPS ${formatCurrency(m.gananciaNominal)} | ${m.botellasTotal} bot.">
+            <div style="height:${hMemb}px; width:16px; background:var(--gold-accent); border-radius:3px 3px 0 0;" title="Membresías: ${formatCurrency(totalMemb)}"></div>
+            <div style="height:${hBot}px; width:16px; background:#38bdf8; border-radius:3px 3px 0 0;" title="Ventas Botella: ${formatCurrency(m.ventasBotella)}"></div>
+            <div style="height:${hGan}px; width:16px; background:var(--emerald); border-radius:3px 3px 0 0;" title="Ganancia PEPS: ${formatCurrency(m.gananciaNominal)}"></div>
+          </div>
+          <span style="font-size:0.75rem; font-weight:${m.isCurrent ? '700' : '500'}; color:${m.isCurrent ? 'var(--gold-accent)' : 'var(--text-muted)'}">${m.name}</span>
+        </div>
+      `;
+    });
+
+    chartHtml += `</div>`;
+    if (chartContainer) chartContainer.innerHTML = chartHtml;
+
+    if (tbodyDetail) {
+      let tableHtml = '';
+      [...monthlyData].reverse().forEach(m => {
+        const totalFact = m.membElite + m.membSeleccion + m.ventasBotella;
+        tableHtml += `
+          <tr style="${m.isCurrent ? 'background:rgba(212,175,55,0.08); font-weight:600;' : ''}">
+            <td style="color:${m.isCurrent ? 'var(--gold-accent)' : 'inherit'}"><strong>${m.name}</strong> ${m.isCurrent ? '<span class="badge badge-warning" style="font-size:0.7rem; margin-left:0.3rem">Actual</span>' : ''}</td>
+            <td>${formatCurrency(m.membElite)}</td>
+            <td>${formatCurrency(m.membSeleccion)}</td>
+            <td>${formatCurrency(m.ventasBotella)}</td>
+            <td><strong style="color:var(--gold-accent)">${formatCurrency(totalFact)}</strong></td>
+            <td><strong style="color:var(--emerald)">${formatCurrency(m.gananciaNominal)}</strong></td>
+            <td><span class="badge badge-info">${m.botellasTotal} bot.</span></td>
+          </tr>
+        `;
+      });
+      tbodyDetail.innerHTML = tableHtml;
+    }
+  }
+
   // 1. DASHBOARD REDESIGNED FOR BORRA
   function renderDashboard() {
     let totalStockVal = 0;
@@ -1335,6 +1537,10 @@
         });
         birthdaysTbody.innerHTML = html;
       }
+    }
+
+    if (window.activeDashTab === 'evolucion') {
+      renderMonthlyEvolutionChart();
     }
   }
 
