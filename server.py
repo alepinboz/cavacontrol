@@ -159,6 +159,8 @@ def init_postgres_tables_if_needed():
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS lotes_detalle TEXT;
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS pagado BOOLEAN DEFAULT TRUE;
         ALTER TABLE Salidas ADD COLUMN IF NOT EXISTS entregado BOOLEAN DEFAULT TRUE;
+        ALTER TABLE Clientes ADD COLUMN IF NOT EXISTS contacto VARCHAR(255);
+        ALTER TABLE Clientes ADD COLUMN IF NOT EXISTS fecha_nacimiento VARCHAR(20);
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(50) DEFAULT 'Admin';
         ALTER TABLE Usuarios ADD COLUMN IF NOT EXISTS fecha_creacion VARCHAR(50);
         ALTER TABLE Articulos ADD COLUMN IF NOT EXISTS no_reponer BOOLEAN DEFAULT FALSE;
@@ -409,10 +411,12 @@ def get_full_state():
             })
 
         # Clientes
-        db_execute(cursor, "SELECT id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id FROM Clientes")
+        db_execute(cursor, "SELECT id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id, contacto, fecha_nacimiento FROM Clientes")
         clientes = [{
             "id": str(r[0]), "nombre": str(r[1]), "apellido": str(r[2]), "telefono": str(r[3] or ''),
-            "provincia": str(r[4] or ''), "localidad": str(r[5] or ''), "direccion": str(r[6] or ''), "membresiaId": str(r[7] or '')
+            "provincia": str(r[4] or ''), "localidad": str(r[5] or ''), "direccion": str(r[6] or ''), "membresiaId": str(r[7] or ''),
+            "contacto": str(r[8] or '') if len(r) > 8 and r[8] is not None else '',
+            "fechaNacimiento": str(r[9] or '') if len(r) > 9 and r[9] is not None else ''
         } for r in cursor.fetchall()]
 
         # Entradas
@@ -601,11 +605,13 @@ def sync_full_state():
             safe_str(c.get('provincia', ''), 100),
             safe_str(c.get('localidad', ''), 100),
             safe_str(c.get('direccion', ''), 255),
-            safe_str(c.get('membresiaId'), 100) if c.get('membresiaId') and safe_str(c.get('membresiaId')) in valid_memb_ids else None
+            safe_str(c.get('membresiaId'), 100) if c.get('membresiaId') and safe_str(c.get('membresiaId')) in valid_memb_ids else None,
+            safe_str(c.get('contacto', ''), 255),
+            safe_str(c.get('fechaNacimiento', ''), 20)
         ) for c in data.get('clientes', []) if c.get('id')]
         cli_rows = deduplicate_rows_by_id(cli_rows)
         if cli_rows:
-            db_executemany(cursor, "INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
+            db_executemany(cursor, "INSERT INTO Clientes (id, nombre, apellido, telefono, provincia, localidad, direccion, membresia_id, contacto, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", cli_rows)
 
         valid_cli_ids = {c[0] for c in cli_rows}
 

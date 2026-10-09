@@ -1242,6 +1242,123 @@
         alertsTbody.innerHTML = html;
       }
     }
+
+    // Render Cumpleaños del Mes Widget
+    const birthdaysTbody = document.getElementById('tbody-dash-birthdays');
+    const elMesNombre = document.getElementById('dash-cumple-mes-nombre');
+    const elCountBadge = document.getElementById('dash-cumple-count-badge');
+
+    if (birthdaysTbody) {
+      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentDay = today.getDate();
+      const currentYear = today.getFullYear();
+
+      if (elMesNombre) elMesNombre.textContent = monthNames[currentMonth];
+
+      const birthdayList = [];
+
+      (state.clientes || []).forEach(c => {
+        if (!c.fechaNacimiento) return;
+        const bDate = parseBirthDate(c.fechaNacimiento);
+        if (bDate && bDate.month === currentMonth) {
+          birthdayList.push({
+            cliente: c,
+            bDate: bDate
+          });
+        }
+      });
+
+      birthdayList.sort((a, b) => a.bDate.day - b.bDate.day);
+
+      if (elCountBadge) {
+        elCountBadge.textContent = `${birthdayList.length} cumpleañero${birthdayList.length !== 1 ? 's' : ''} en ${monthNames[currentMonth]}`;
+      }
+
+      if (birthdayList.length === 0) {
+        birthdaysTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:1.2rem;">🎈 No hay cumpleaños registrados para el mes de ${monthNames[currentMonth]}</td></tr>`;
+      } else {
+        let html = '';
+        birthdayList.forEach(item => {
+          const c = item.cliente;
+          const b = item.bDate;
+          const isToday = b.day === currentDay;
+
+          let age = null;
+          if (b.year) {
+            age = currentYear - b.year;
+          }
+
+          let estadoBadge = '';
+          if (isToday) {
+            estadoBadge = `<span class="badge badge-warning" style="font-weight:bold; background:gold; color:#000; font-size:0.85rem;">🎉 ¡HOY ES SU CUMPLEAÑOS! ${age ? '(' + age + ' años)' : ''}</span>`;
+          } else if (b.day > currentDay) {
+            const daysLeft = b.day - currentDay;
+            estadoBadge = `<span class="badge badge-info">Faltan ${daysLeft} día${daysLeft > 1 ? 's' : ''} ${age ? '(Cumple ' + age + ')' : ''}</span>`;
+          } else {
+            estadoBadge = `<span class="text-muted" style="font-size:0.85rem;">Cumplió el ${b.day}/${currentMonth + 1} ${age ? '(' + age + ' años)' : ''}</span>`;
+          }
+
+          const rawDateStr = b.year ? `${String(b.day).padStart(2,'0')}/${String(b.month + 1).padStart(2,'0')}/${b.year}` : `${String(b.day).padStart(2,'0')}/${String(b.month + 1).padStart(2,'0')}`;
+
+          html += `
+            <tr style="${isToday ? 'background: rgba(255, 215, 0, 0.08);' : ''}">
+              <td><strong>${c.nombre} ${c.apellido}</strong></td>
+              <td>${c.telefono || '-'}</td>
+              <td>${c.contacto || '-'}</td>
+              <td><small>${rawDateStr}</small></td>
+              <td><strong class="text-gold">${b.day} de ${monthNames[currentMonth]}</strong></td>
+              <td>${estadoBadge}</td>
+            </tr>
+          `;
+        });
+        birthdaysTbody.innerHTML = html;
+      }
+    }
+  }
+
+  function parseBirthDate(dateStr) {
+    if (!dateStr) return null;
+    const str = dateStr.trim();
+    if (!str) return null;
+
+    if (str.includes('-')) {
+      const parts = str.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+          return { year: y, month: m, day: d };
+        }
+      }
+    }
+
+    if (str.includes('/')) {
+      const parts = str.split('/');
+      if (parts.length >= 2) {
+        const d = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10) - 1;
+        const y = parts[2] ? parseInt(parts[2], 10) : null;
+        if (!isNaN(d) && !isNaN(m)) {
+          return { year: y, month: m, day: d };
+        }
+      }
+    }
+    return null;
+  }
+
+  function formatBirthDateDisplay(dateStr) {
+    if (!dateStr) return '-';
+    const parsed = parseBirthDate(dateStr);
+    if (!parsed) return dateStr;
+    const dStr = String(parsed.day).padStart(2, '0');
+    const mStr = String(parsed.month + 1).padStart(2, '0');
+    if (parsed.year) {
+      return `${dStr}/${mStr}/${parsed.year}`;
+    }
+    return `${dStr}/${mStr}`;
   }
 
   // 2. MEMBRESÍAS (PRECIO FIJO)
@@ -1357,6 +1474,8 @@
     const list = (state.clientes || []).filter(c => {
       const matchSearch = `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) ||
         (c.telefono && c.telefono.includes(searchVal)) ||
+        (c.contacto && c.contacto.toLowerCase().includes(searchVal)) ||
+        (c.fechaNacimiento && c.fechaNacimiento.includes(searchVal)) ||
         (c.localidad && c.localidad.toLowerCase().includes(searchVal)) ||
         (c.provincia && c.provincia.toLowerCase().includes(searchVal));
 
@@ -1384,7 +1503,7 @@
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">No hay clientes registrados que coincidan con los filtros</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No hay clientes registrados que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -1397,11 +1516,14 @@
         membName = `<span class="badge ${badgeClass}" style="margin-right:0.3rem">${memb.tipo || 'Selección'}</span> ${memb.descripcion} (${memb.codigo})`;
       }
       const entregasCount = getClienteEntregasCount(c.id);
+      const bDayStr = c.fechaNacimiento ? formatBirthDateDisplay(c.fechaNacimiento) : '-';
 
       html += `
         <tr>
           <td><strong>${c.nombre} ${c.apellido}</strong></td>
           <td>${c.telefono || '-'}</td>
+          <td>${c.contacto || '-'}</td>
+          <td><small>${bDayStr}</small></td>
           <td>${c.localidad || '-'}, ${c.provincia || '-'}</td>
           <td>${c.direccion || '-'}</td>
           <td>${membName}</td>
@@ -2516,6 +2638,17 @@
         </div>
         <div class="form-row">
           <div class="form-group">
+            <label>Persona o Nota de Contacto</label>
+            <input type="text" id="cli-contacto" class="form-control" value="${isEdit ? cli.contacto || '' : ''}" placeholder="Ej: Juan Pérez / WhatsApp / Secretaria">
+          </div>
+          <div class="form-group">
+            <label>Fecha de Nacimiento</label>
+            <input type="date" id="cli-fecha-nacimiento" class="form-control" value="${isEdit ? cli.fechaNacimiento || '' : ''}">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
             <label>Número de Teléfono</label>
             <input type="text" id="cli-telefono" class="form-control" value="${isEdit ? cli.telefono || '' : ''}" placeholder="Ej: +54 9 261 ...">
           </div>
@@ -2561,6 +2694,8 @@
       e.preventDefault();
       const nombre = document.getElementById('cli-nombre').value.trim();
       const apellido = document.getElementById('cli-apellido').value.trim();
+      const contacto = document.getElementById('cli-contacto').value.trim();
+      const fechaNacimiento = document.getElementById('cli-fecha-nacimiento').value.trim();
       const telefono = document.getElementById('cli-telefono').value.trim();
       const provincia = document.getElementById('cli-provincia').value.trim();
       const localidad = document.getElementById('cli-localidad').value.trim();
@@ -2570,6 +2705,8 @@
       if (isEdit) {
         cli.nombre = nombre;
         cli.apellido = apellido;
+        cli.contacto = contacto;
+        cli.fechaNacimiento = fechaNacimiento;
         cli.telefono = telefono;
         cli.provincia = provincia;
         cli.localidad = localidad;
@@ -2582,6 +2719,8 @@
           id: generateUniqueId('cli'),
           nombre,
           apellido,
+          contacto,
+          fechaNacimiento,
           telefono,
           provincia,
           localidad,
@@ -3625,10 +3764,12 @@
           const nombre = r.nombre || (r._raw ? r._raw[0] : '');
           const apellido = r.apellido || (r._raw ? r._raw[1] : '');
           const telefono = r.telefono || r.tel || (r._raw ? r._raw[2] : '');
-          const provincia = r.provincia || (r._raw ? r._raw[3] : '');
-          const localidad = r.localidad || (r._raw ? r._raw[4] : '');
-          const direccion = r.direccion || (r._raw ? r._raw[5] : '');
-          const membVal = (r.tipomembresia || r.membresia || r.tipo || (r._raw ? r._raw[6] : '')).trim();
+          const contacto = r.contacto || r.personacontacto || r.nota || (r._raw ? r._raw[3] : '');
+          const fechaNacimiento = r.fechanacimiento || r.cumpleanos || r.fechanac || (r._raw ? r._raw[4] : '');
+          const provincia = r.provincia || (r._raw ? r._raw[5] : '');
+          const localidad = r.localidad || (r._raw ? r._raw[6] : '');
+          const direccion = r.direccion || (r._raw ? r._raw[7] : '');
+          const membVal = (r.tipomembresia || r.membresia || r.tipo || (r._raw ? r._raw[8] : '')).trim();
 
           if (nombre && apellido) {
             let memb = null;
@@ -3661,6 +3802,8 @@
               nombre: nombre.trim(),
               apellido: apellido.trim(),
               telefono: telefono.trim(),
+              contacto: contacto.trim(),
+              fechaNacimiento: fechaNacimiento.trim(),
               provincia: provincia.trim(),
               localidad: localidad.trim(),
               direccion: direccion.trim(),
@@ -4167,12 +4310,12 @@
       ]);
     } else if (moduleName === 'clientes') {
       title = 'Reporte de Clientes';
-      headers = ['Nombre y Apellido', 'Teléfono', 'Provincia', 'Localidad', 'Dirección', 'Membresía Asignada', 'Entregas (Botellas)'];
+      headers = ['Nombre y Apellido', 'Teléfono', 'Contacto', 'Fecha de Nacimiento', 'Provincia', 'Localidad', 'Dirección', 'Membresía Asignada', 'Entregas (Botellas)'];
       const searchVal = (document.getElementById('search-clientes').value || '').toLowerCase();
       const provinciaFilter = document.getElementById('filter-clientes-provincia') ? document.getElementById('filter-clientes-provincia').value : '';
       const membresiaFilter = document.getElementById('filter-clientes-membresia') ? document.getElementById('filter-clientes-membresia').value : '';
       const list = (state.clientes || []).filter(c => {
-        const matchSearch = `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) || (c.telefono && c.telefono.includes(searchVal));
+        const matchSearch = `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) || (c.telefono && c.telefono.includes(searchVal)) || (c.contacto && c.contacto.toLowerCase().includes(searchVal)) || (c.fechaNacimiento && c.fechaNacimiento.includes(searchVal));
         const matchProvincia = !provinciaFilter || (c.provincia && c.provincia.toLowerCase() === provinciaFilter.toLowerCase());
         const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
         let matchMembresia = true;
@@ -4196,9 +4339,12 @@
       rows = list.map(c => {
         const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
         const membStr = memb ? `[${memb.tipo || 'Selección'}] ${memb.descripcion} (${memb.codigo})` : 'Sin membresía';
+        const bStr = c.fechaNacimiento ? formatBirthDateDisplay(c.fechaNacimiento) : '-';
         return [
           `${c.nombre} ${c.apellido}`,
           c.telefono || '-',
+          c.contacto || '-',
+          bStr,
           c.provincia || '-',
           c.localidad || '-',
           c.direccion || '-',

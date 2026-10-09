@@ -57,8 +57,12 @@ CREATE TABLE IF NOT EXISTS Clientes (
     provincia VARCHAR(100),
     localidad VARCHAR(100),
     direccion VARCHAR(255),
-    membresia_id VARCHAR(100)
+    membresia_id VARCHAR(100),
+    contacto VARCHAR(255),
+    fecha_nacimiento VARCHAR(20)
 );
+ALTER TABLE Clientes ADD COLUMN IF NOT EXISTS contacto VARCHAR(255);
+ALTER TABLE Clientes ADD COLUMN IF NOT EXISTS fecha_nacimiento VARCHAR(20);
 
 CREATE TABLE IF NOT EXISTS Entradas (
     id VARCHAR(100) PRIMARY KEY,

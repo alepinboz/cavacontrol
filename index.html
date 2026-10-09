@@ -261,6 +261,33 @@
                 </div>
               </div>
             </div>
+
+            <!-- Widget 3: Cumpleaños del Mes -->
+            <div class="card shadow-sm" style="grid-column: 1 / -1; border-top: 3px solid var(--gold-accent);">
+              <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <h3><i data-lucide="cake"></i> 🎂 Cumpleaños del Mes <span id="dash-cumple-mes-nombre" class="badge badge-warning" style="margin-left:0.5rem; font-size:0.85rem; font-weight:bold;"></span></h3>
+                <small id="dash-cumple-count-badge" class="text-muted" style="font-weight:600;"></small>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table" id="table-dash-birthdays">
+                    <thead>
+                      <tr>
+                        <th>Cliente</th>
+                        <th>Teléfono</th>
+                        <th>Contacto</th>
+                        <th>Fecha Nacimiento</th>
+                        <th>Día de Cumpleaños</th>
+                        <th>Estado / Edad</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-dash-birthdays">
+                      <tr><td colspan="6" class="text-center text-muted">Cargando cumpleaños del mes...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -401,6 +428,8 @@
                   <tr>
                     <th>Nombre y Apellido</th>
                     <th>Teléfono</th>
+                    <th>Contacto</th>
+                    <th>F. Nacimiento</th>
                     <th>Ubicación</th>
                     <th>Dirección</th>
                     <th>Membresía Asignada</th>
