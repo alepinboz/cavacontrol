@@ -55,6 +55,28 @@
     return combined;
   }
 
+  function getClienteMembresiaTipo(cli) {
+    if (!cli || !cli.membresiaId) return '';
+    const raw = String(cli.membresiaId).trim();
+    if (!raw) return '';
+
+    // Check if raw matches a package ID directly
+    const memb = (state.membresias || []).find(m => String(m.id) === raw);
+    if (memb) {
+      if (memb.tipo) return memb.tipo;
+      if (memb.codigo && memb.codigo.toUpperCase().includes('ELI')) return 'Élite';
+      if (memb.descripcion && memb.descripcion.toUpperCase().includes('ELITE')) return 'Élite';
+      return 'Selección';
+    }
+
+    // If raw matches a known type string directly
+    const lower = raw.toLowerCase();
+    if (lower.includes('elit') || lower.includes('élit')) return 'Élite';
+    if (lower.includes('selec')) return 'Selección';
+
+    return raw;
+  }
+
   // Devuelve rango por defecto del mes en curso (del 1er día al último día del mes)
   function getCurrentMonthDateRange() {
     const now = new Date();
@@ -1479,25 +1501,23 @@
 
       const matchProvincia = !provinciaFilter || (c.provincia && c.provincia.toLowerCase() === provinciaFilter.toLowerCase());
 
-      const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
+      const tipo = getClienteMembresiaTipo(c);
       let matchMembresia = true;
       if (membresiaFilter === 'sin') {
-        matchMembresia = !c.membresiaId || !memb;
+        matchMembresia = !tipo;
       } else if (membresiaFilter === 'elite') {
-        matchMembresia = memb && (
-          (memb.tipo && (memb.tipo.toLowerCase().includes('élit') || memb.tipo.toLowerCase().includes('elit'))) ||
-          (memb.codigo && memb.codigo.toUpperCase().includes('ELI'))
-        );
+        matchMembresia = (tipo === 'Élite');
       } else if (membresiaFilter === 'seleccion') {
-        matchMembresia = memb && (
-          (memb.tipo && (memb.tipo.toLowerCase().includes('selecc') || memb.tipo.toLowerCase().includes('selecc'))) ||
-          (!memb.tipo && (!memb.codigo || !memb.codigo.toUpperCase().includes('ELI')))
-        );
+        matchMembresia = (tipo === 'Selección');
       } else if (membresiaFilter) {
-        matchMembresia = memb && memb.tipo && memb.tipo.toLowerCase() === membresiaFilter.toLowerCase();
+        matchMembresia = tipo.toLowerCase() === membresiaFilter.toLowerCase();
       }
 
       return matchSearch && matchProvincia && matchMembresia;
+    }).sort((a, b) => {
+      const nameA = `${a.nombre || ''} ${a.apellido || ''}`.trim();
+      const nameB = `${b.nombre || ''} ${b.apellido || ''}`.trim();
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
     });
 
     if (list.length === 0) {
@@ -1507,11 +1527,14 @@
 
     let html = '';
     list.forEach(c => {
-      const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
+      const tipo = getClienteMembresiaTipo(c);
       let membName = '<span class="text-muted">Sin membresía</span>';
-      if (memb) {
-        const badgeClass = memb.tipo === 'Élite' ? 'badge-warning' : 'badge-info';
-        membName = `<span class="badge ${badgeClass}" style="margin-right:0.3rem">${memb.tipo || 'Selección'}</span> ${memb.descripcion} (${memb.codigo})`;
+      if (tipo === 'Élite') {
+        membName = `<span class="badge badge-warning">👑 Membresía Élite</span>`;
+      } else if (tipo === 'Selección') {
+        membName = `<span class="badge badge-info">🍷 Membresía Selección</span>`;
+      } else if (tipo) {
+        membName = `<span class="badge badge-secondary">Membresía ${tipo}</span>`;
       }
       const entregasCount = getClienteEntregasCount(c.id);
       const bDayStr = c.fechaNacimiento ? formatBirthDateDisplay(c.fechaNacimiento) : '-';
@@ -2608,15 +2631,11 @@
     const cli = clienteId ? state.clientes.find(c => String(c.id) === String(clienteId)) : null;
     const isEdit = !!cli;
 
-    const sortedMembs = [...(state.membresias || [])].sort((a, b) => {
-      const labelA = `[${a.tipo || 'Selección'}] ${a.codigo || ''} - ${a.descripcion || ''}`;
-      const labelB = `[${b.tipo || 'Selección'}] ${b.codigo || ''} - ${b.descripcion || ''}`;
-      return labelA.localeCompare(labelB, 'es', { sensitivity: 'base' });
-    });
-
-    const membOptions = sortedMembs.map(m => `
-      <option value="${m.id}" data-tipo="${m.tipo || 'Selección'}" ${isEdit && String(cli.membresiaId) === String(m.id) ? 'selected' : ''}>
-        [${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion} (${formatCurrency(m.precio || 0)})
+    const currentTipo = isEdit ? getClienteMembresiaTipo(cli) : '';
+    const availableTipos = getAvailableTiposMembresia();
+    const tipoOptions = availableTipos.map(tipo => `
+      <option value="${tipo}" ${currentTipo.toLowerCase() === tipo.toLowerCase() ? 'selected' : ''}>
+        Membresía ${tipo}
       </option>
     `).join('');
 
@@ -2667,10 +2686,10 @@
         </div>
 
         <div class="form-group">
-          <label>Membresía Asignada (Opcional)</label>
+          <label>Membresía Asignada (Tipo)</label>
           <select id="cli-membresia" class="form-control">
-            <option value="">Sin Membresía / Público General</option>
-            ${membOptions}
+            <option value="" ${!currentTipo ? 'selected' : ''}>Sin Membresía / Público General</option>
+            ${tipoOptions}
           </select>
         </div>
 
@@ -3184,9 +3203,17 @@
         </div>
 
         <div id="sec-salida-membresia" style="display:none">
-          <div class="form-group">
-            <label>Membresía Vigente Seleccionada *</label>
-            <select id="sal-membresia" class="form-control"></select>
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label>Membresía Vigente a Entregar *</label>
+              <select id="sal-membresia" class="form-control"></select>
+            </div>
+            <div class="form-group" style="flex:1; display:flex; flex-direction:column; justify-content:flex-end">
+              <label style="font-weight:600; font-size:0.85rem; color:var(--gold-accent); margin-bottom:0.3rem">Membresía Asignada al Cliente</label>
+              <div id="sal-cliente-membresia-assigned" style="padding:0.5rem 0.75rem; background:rgba(0,0,0,0.25); border-radius:var(--radius-md); border:1px solid var(--border-color); min-height:38px; display:flex; align-items:center">
+                <span class="text-muted" style="font-size:0.85rem">Seleccione un cliente</span>
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label>Detalle de Vinos y Botellas de la Membresía</label>
@@ -3252,8 +3279,8 @@
       const today = document.getElementById('sal-fecha').value;
 
       const cli = state.clientes.find(c => String(c.id) === String(cliId));
-      const clientMemb = cli && cli.membresiaId ? state.membresias.find(m => String(m.id) === String(cli.membresiaId)) : null;
-      const hasActiveMemb = clientMemb ? isMembresiaVigente(clientMemb, today) : false;
+      const assignedTipo = getClienteMembresiaTipo(cli);
+      const hasActiveMemb = !!assignedTipo;
 
       const latestEntrada = (state.entradas || []).filter(e => String(e.articuloId) === String(artId)).sort((a, b) => Number(b.numeroCompra) - Number(a.numeroCompra))[0];
 
@@ -3319,6 +3346,20 @@
       const cliId = cliSelect.value;
       const cli = state.clientes.find(c => String(c.id) === String(cliId));
       const today = document.getElementById('sal-fecha').value;
+      const assignedContainer = document.getElementById('sal-cliente-membresia-assigned');
+
+      const assignedTipo = getClienteMembresiaTipo(cli);
+      if (assignedContainer) {
+        if (assignedTipo === 'Élite') {
+          assignedContainer.innerHTML = `<span class="badge badge-warning" style="font-size:0.85rem; padding:0.4rem 0.7rem">👑 Membresía Asignada: ÉLITE</span>`;
+        } else if (assignedTipo === 'Selección') {
+          assignedContainer.innerHTML = `<span class="badge badge-info" style="font-size:0.85rem; padding:0.4rem 0.7rem">🍷 Membresía Asignada: SELECCIÓN</span>`;
+        } else if (assignedTipo) {
+          assignedContainer.innerHTML = `<span class="badge badge-secondary" style="font-size:0.85rem; padding:0.4rem 0.7rem">Membresía Asignada: ${assignedTipo.toUpperCase()}</span>`;
+        } else {
+          assignedContainer.innerHTML = `<span class="badge badge-secondary" style="font-size:0.85rem; padding:0.4rem 0.7rem; opacity:0.85">⚠️ Sin Membresía Asignada</span>`;
+        }
+      }
 
       const vigentes = state.membresias.filter(m => isMembresiaVigente(m, today));
 
@@ -3328,11 +3369,22 @@
         return;
       }
 
+      let defaultMembId = '';
+      if (cli) {
+        const exactMatch = vigentes.find(m => String(m.id) === String(cli.membresiaId));
+        if (exactMatch) {
+          defaultMembId = exactMatch.id;
+        } else if (assignedTipo) {
+          const typeMatch = vigentes.find(m => (m.tipo || 'Selección').toLowerCase() === assignedTipo.toLowerCase());
+          if (typeMatch) defaultMembId = typeMatch.id;
+        }
+      }
+
       membSelect.innerHTML = vigentes.map(m => {
-        const isClientDefault = cli && String(cli.membresiaId) === String(m.id);
+        const isSelected = defaultMembId ? String(m.id) === String(defaultMembId) : false;
         return `
-          <option value="${m.id}" ${isClientDefault ? 'selected' : ''}>
-            [${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion} (${formatCurrency(m.precio || 0)}) ${isClientDefault ? '(Asignada al cliente)' : ''}
+          <option value="${m.id}" ${isSelected ? 'selected' : ''}>
+            [${m.tipo || 'Selección'}] ${m.codigo} - ${m.descripcion} (${formatCurrency(m.precio || 0)}) ${isSelected ? '(Coincide con cliente)' : ''}
           </option>
         `;
       }).join('');
@@ -4315,28 +4367,26 @@
       const list = (state.clientes || []).filter(c => {
         const matchSearch = `${c.nombre} ${c.apellido}`.toLowerCase().includes(searchVal) || (c.telefono && c.telefono.includes(searchVal)) || (c.contacto && c.contacto.toLowerCase().includes(searchVal)) || (c.fechaNacimiento && c.fechaNacimiento.includes(searchVal));
         const matchProvincia = !provinciaFilter || (c.provincia && c.provincia.toLowerCase() === provinciaFilter.toLowerCase());
-        const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
+        const tipo = getClienteMembresiaTipo(c);
         let matchMembresia = true;
         if (membresiaFilter === 'sin') {
-          matchMembresia = !c.membresiaId || !memb;
+          matchMembresia = !tipo;
         } else if (membresiaFilter === 'elite') {
-          matchMembresia = memb && (
-            (memb.tipo && (memb.tipo.toLowerCase().includes('élit') || memb.tipo.toLowerCase().includes('elit'))) ||
-            (memb.codigo && memb.codigo.toUpperCase().includes('ELI'))
-          );
+          matchMembresia = (tipo === 'Élite');
         } else if (membresiaFilter === 'seleccion') {
-          matchMembresia = memb && (
-            (memb.tipo && (memb.tipo.toLowerCase().includes('selecc') || memb.tipo.toLowerCase().includes('selecc'))) ||
-            (!memb.tipo && (!memb.codigo || !memb.codigo.toUpperCase().includes('ELI')))
-          );
+          matchMembresia = (tipo === 'Selección');
         } else if (membresiaFilter) {
-          matchMembresia = memb && memb.tipo && memb.tipo.toLowerCase() === membresiaFilter.toLowerCase();
+          matchMembresia = tipo.toLowerCase() === membresiaFilter.toLowerCase();
         }
         return matchSearch && matchProvincia && matchMembresia;
+      }).sort((a, b) => {
+        const nameA = `${a.nombre || ''} ${a.apellido || ''}`.trim();
+        const nameB = `${b.nombre || ''} ${b.apellido || ''}`.trim();
+        return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
       });
       rows = list.map(c => {
-        const memb = state.membresias.find(m => String(m.id) === String(c.membresiaId));
-        const membStr = memb ? `[${memb.tipo || 'Selección'}] ${memb.descripcion} (${memb.codigo})` : 'Sin membresía';
+        const tipo = getClienteMembresiaTipo(c);
+        const membStr = tipo ? `Membresía ${tipo}` : 'Sin membresía';
         const bStr = c.fechaNacimiento ? formatBirthDateDisplay(c.fechaNacimiento) : '-';
         return [
           `${c.nombre} ${c.apellido}`,
