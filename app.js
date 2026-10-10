@@ -498,16 +498,26 @@
     checkSession();
   }
 
+  function hasAnyStateData() {
+    if (!state) return false;
+    return (
+      (Array.isArray(state.articulos) && state.articulos.length > 0) ||
+      (Array.isArray(state.clientes) && state.clientes.length > 0) ||
+      (Array.isArray(state.proveedores) && state.proveedores.length > 0) ||
+      (Array.isArray(state.membresias) && state.membresias.length > 0)
+    );
+  }
+
   function saveState(immediate = false) {
     try {
-      if (state && Array.isArray(state.articulos) && state.articulos.length > 0) {
+      if (state && hasAnyStateData()) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
     } catch (e) {
       console.error('Error guardando en localStorage:', e);
     }
 
-    if (!state || !Array.isArray(state.articulos) || state.articulos.length === 0) {
+    if (!state || !hasAnyStateData()) {
       return;
     }
 
@@ -522,7 +532,7 @@
   }
 
   async function triggerBackgroundSqlServerSync() {
-    if (!state || !Array.isArray(state.articulos) || state.articulos.length === 0) {
+    if (!state || !hasAnyStateData()) {
       return;
     }
     try {
@@ -537,14 +547,16 @@
         updateSqlBadge(true);
       } else {
         const errJson = await res.json().catch(() => ({}));
-        lastDbErrorMessage = errJson.error || errJson.message || `Sync HTTP ${res.status}`;
+        lastDbErrorMessage = errJson.error || errJson.message || `Error HTTP ${res.status} al grabar en la Base de Datos`;
         isSqlServerConnected = false;
         updateSqlBadge(false, lastDbErrorMessage);
+        showToast(`❌ ERROR EN BASE DE DATOS: No se grabaron los cambios. Motivo: ${lastDbErrorMessage}`, 'error');
       }
     } catch (e) {
       isSqlServerConnected = false;
-      lastDbErrorMessage = e.message || 'Error de conexión';
+      lastDbErrorMessage = e.message || 'Sin conexión con el servidor API/Base de Datos';
       updateSqlBadge(false, lastDbErrorMessage);
+      showToast(`❌ ERROR DE CONEXIÓN: No se pudo guardar en la Base de Datos. ${lastDbErrorMessage}`, 'error');
     }
   }
 

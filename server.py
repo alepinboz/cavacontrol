@@ -605,7 +605,7 @@ def sync_full_state():
             safe_str(c.get('provincia', ''), 100),
             safe_str(c.get('localidad', ''), 100),
             safe_str(c.get('direccion', ''), 255),
-            safe_str(c.get('membresiaId'), 100) if c.get('membresiaId') and safe_str(c.get('membresiaId')) in valid_memb_ids else None,
+            safe_str(c.get('membresiaId'), 100) if c.get('membresiaId') else None,
             safe_str(c.get('contacto', ''), 255),
             safe_str(c.get('fechaNacimiento', ''), 20)
         ) for c in data.get('clientes', []) if c.get('id')]
@@ -642,7 +642,7 @@ def sync_full_state():
             safe_str(s.get('clienteId')),
             safe_str(s.get('tipoVenta', 'Directa'), 50),
             safe_str(s.get('articuloId')),
-            safe_str(s.get('membresiaId'), 100) if s.get('membresiaId') and safe_str(s.get('membresiaId')) in valid_memb_ids else None,
+            safe_str(s.get('membresiaId'), 100) if s.get('membresiaId') else None,
             safe_int(s.get('cantidadBotellas'), 1),
             safe_str(s.get('detalle', ''), 255),
             safe_float(s.get('precioUnitario'), 0.0),
@@ -687,7 +687,11 @@ def sync_full_state():
             except Exception:
                 pass
         response.status = 500
-        return {"error": str(e)}
+        return {
+            "success": False,
+            "error": f"Fallo de Transacción en la Base de Datos: {str(e)}",
+            "message": f"Fallo de Transacción en la Base de Datos: {str(e)}"
+        }
 
 @app.route('/<filename:path>', method=['GET', 'OPTIONS'])
 @enable_cors
