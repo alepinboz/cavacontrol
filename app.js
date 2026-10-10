@@ -2037,7 +2037,17 @@
     }
 
     let html = '';
-    groupsMap.forEach((items, transKey) => {
+    const sortedGroups = Array.from(groupsMap.entries()).sort((a, b) => {
+      const itemsA = a[1];
+      const itemsB = b[1];
+      const cliA = state.clientes.find(c => String(c.id) === String(itemsA[0] ? itemsA[0].clienteId : ''));
+      const cliB = state.clientes.find(c => String(c.id) === String(itemsB[0] ? itemsB[0].clienteId : ''));
+      const nameA = cliA ? `${cliA.nombre || ''} ${cliA.apellido || ''}`.trim() : '';
+      const nameB = cliB ? `${cliB.nombre || ''} ${cliB.apellido || ''}`.trim() : '';
+      return nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+    });
+
+    sortedGroups.forEach(([transKey, items]) => {
       const first = items[0];
       const cli = state.clientes.find(c => String(c.id) === String(first.clienteId));
       const cliName = cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A';
