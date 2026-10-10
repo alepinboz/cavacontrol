@@ -892,6 +892,39 @@
     </div>
   </div>
 
+  <!-- CAVABOT INTELLIGENT ASSISTANT WIDGET -->
+  <button id="cavabot-trigger" class="cavabot-trigger" onclick="window.toggleCavaBot()" title="Abrir CavaBot - Asistente Inteligente">
+    <i data-lucide="bot"></i>
+    <span>CavaBot</span>
+  </button>
+
+  <div id="cavabot-panel" class="cavabot-panel">
+    <div class="cavabot-header">
+      <div class="cavabot-title">
+        <i data-lucide="sparkles"></i>
+        <span>CavaBot - Asistente CavaControl</span>
+      </div>
+      <div class="cavabot-actions">
+        <button class="cavabot-btn-icon" onclick="window.clearCavaBotChat()" title="Limpiar conversación"><i data-lucide="trash-2"></i></button>
+        <button class="cavabot-btn-icon" onclick="window.toggleCavaBot()" title="Cerrar"><i data-lucide="x"></i></button>
+      </div>
+    </div>
+    <div class="cavabot-suggestions">
+      <button class="cavabot-chip" onclick="window.askCavaBot('¿Cuánto vendí en la segunda quincena de septiembre?')">📅 Ventas 2da Quincena Sept.</button>
+      <button class="cavabot-chip" onclick="window.askCavaBot('¿Cuáles son los 5 vinos que más stock tienen?')">🍷 Top 5 Vinos con Más Stock</button>
+      <button class="cavabot-chip" onclick="window.askCavaBot('¿Qué vinos tienen stock bajo o hay que reponer?')">⚠️ Alerta Stock Bajo</button>
+      <button class="cavabot-chip" onclick="window.askCavaBot('¿Cuántos clientes tienen Membresía Élite o Selección?')">👑 Clientes por Membresía</button>
+      <button class="cavabot-chip" onclick="window.askCavaBot('¿Cuál es la valoración total de mi cava?')">💰 Valor Total Cava</button>
+    </div>
+    <div id="cavabot-messages" class="cavabot-messages">
+      <!-- Chat Messages populated by app.js -->
+    </div>
+    <form id="cavabot-form" class="cavabot-footer" onsubmit="window.handleCavaBotSubmit(event)">
+      <input type="text" id="cavabot-input" class="cavabot-input" placeholder="Preguntame sobre ventas, stock, clientes..." autocomplete="off">
+      <button type="submit" class="cavabot-send-btn" title="Enviar consulta"><i data-lucide="send"></i></button>
+    </form>
+  </div>
+
   <!-- TOAST NOTIFICATION -->
   <div id="toast-container" class="toast-container"></div>
 

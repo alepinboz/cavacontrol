@@ -916,3 +916,275 @@ a {
 .text-gold { color: var(--gold-accent); }
 .text-rose { color: var(--rose); }
 .stock-summary-badge { background: var(--bg-card); border: 1px solid var(--border-color); padding: 0.4rem 0.8rem; border-radius: var(--radius-full); font-size: 0.9rem; }
+
+/* ==========================================================================
+   CAVABOT - INTELLIGENT ASSISTANT CHATBOT WIDGET
+   ========================================================================== */
+.cavabot-trigger {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1990;
+  background: linear-gradient(135deg, var(--borra-brand), #2c1625);
+  border: 1px solid var(--gold-accent);
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: 0 6px 25px rgba(72, 41, 61, 0.6), 0 0 15px rgba(212, 175, 55, 0.3);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cavabot-trigger:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 10px 30px rgba(72, 41, 61, 0.8), 0 0 20px rgba(212, 175, 55, 0.5);
+  background: linear-gradient(135deg, #5c344f, #3b1e32);
+}
+
+.cavabot-trigger i {
+  color: var(--gold-accent);
+  font-size: 1.2rem;
+}
+
+.cavabot-panel {
+  position: fixed;
+  bottom: 5rem;
+  right: 1.5rem;
+  width: 440px;
+  max-width: calc(100vw - 3rem);
+  height: 570px;
+  max-height: calc(100vh - 7rem);
+  z-index: 1995;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cavabot-panel.active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: all;
+}
+
+.cavabot-header {
+  background: linear-gradient(135deg, var(--borra-brand), #1f111b);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cavabot-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.cavabot-title i {
+  color: var(--gold-accent);
+}
+
+.cavabot-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cavabot-btn-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.cavabot-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.cavabot-suggestions {
+  padding: 0.65rem 0.85rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.cavabot-chip {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.35rem 0.7rem;
+  border-radius: 20px;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.cavabot-chip:hover {
+  background: var(--wine-light);
+  border-color: var(--gold-accent);
+  color: #fff;
+}
+
+.cavabot-messages {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  background: radial-gradient(circle at top right, rgba(72, 41, 61, 0.12), transparent 70%);
+}
+
+.cavabot-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 90%;
+  animation: fadeIn 0.25s ease;
+}
+
+.cavabot-msg-user {
+  align-self: flex-end;
+}
+
+.cavabot-msg-bot {
+  align-self: flex-start;
+}
+
+.cavabot-bubble {
+  padding: 0.75rem 0.95rem;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.cavabot-msg-user .cavabot-bubble {
+  background: linear-gradient(135deg, var(--borra-brand), #5e3350);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+.cavabot-msg-bot .cavabot-bubble {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  border-bottom-left-radius: 3px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.cavabot-msg-time {
+  font-size: 0.65rem;
+  color: var(--text-subtle);
+  margin-top: 0.2rem;
+}
+
+.cavabot-msg-user .cavabot-msg-time {
+  align-self: flex-end;
+}
+
+.cavabot-msg-bot .cavabot-msg-time {
+  align-self: flex-start;
+}
+
+.cavabot-card-stat {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.7rem;
+  margin-top: 0.4rem;
+}
+
+.cavabot-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.cavabot-table th, .cavabot-table td {
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.cavabot-table th {
+  color: var(--gold-accent);
+  font-weight: 600;
+}
+
+.cavabot-footer {
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cavabot-input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 0.55rem 0.95rem;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.cavabot-input:focus {
+  border-color: var(--gold-accent);
+}
+
+.cavabot-send-btn {
+  background: var(--borra-brand);
+  border: 1px solid var(--gold-accent);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.cavabot-send-btn:hover {
+  background: var(--wine-hover);
+  transform: scale(1.05);
+}

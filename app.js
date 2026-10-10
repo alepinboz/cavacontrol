@@ -4931,6 +4931,354 @@
     });
   }
 
+  // ==========================================================================
+  // CAVABOT - ASISTENTE INTELIGENTE CHATBOT ENGINE
+  // ==========================================================================
+  let cavabotHistory = [];
+
+  window.toggleCavaBot = function () {
+    const panel = document.getElementById('cavabot-panel');
+    if (!panel) return;
+    const isActive = panel.classList.toggle('active');
+    if (isActive) {
+      const msgs = document.getElementById('cavabot-messages');
+      if (msgs && msgs.children.length === 0) {
+        renderCavaBotWelcome();
+      }
+      setTimeout(() => {
+        const input = document.getElementById('cavabot-input');
+        if (input) input.focus();
+      }, 300);
+    }
+  };
+
+  window.clearCavaBotChat = function () {
+    cavabotHistory = [];
+    const msgs = document.getElementById('cavabot-messages');
+    if (msgs) msgs.innerHTML = '';
+    renderCavaBotWelcome();
+  };
+
+  function renderCavaBotWelcome() {
+    const msgs = document.getElementById('cavabot-messages');
+    if (!msgs) return;
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const welcomeHtml = `
+      <div class="cavabot-msg cavabot-msg-bot">
+        <div class="cavabot-bubble">
+          👋 ¡Hola! Soy <strong>CavaBot</strong>, tu asistente inteligente de <strong>BORRA CavaControl</strong>.
+          <br><br>
+          Puedo responder tus consultas sobre ventas, facturación por quincenas o meses, stock de vinos, clientes, membresías y valoración de tu cava en tiempo real.
+          <br><br>
+          <em>Hacé clic en alguno de los botones sugeridos o escribí tu pregunta abajo.</em>
+        </div>
+        <div class="cavabot-msg-time">${timeStr}</div>
+      </div>
+    `;
+    msgs.innerHTML = welcomeHtml;
+    if (window.lucide) window.lucide.createIcons({ scope: msgs });
+  }
+
+  window.askCavaBot = function (promptText) {
+    if (!promptText || !promptText.trim()) return;
+    const input = document.getElementById('cavabot-input');
+    if (input) input.value = '';
+
+    appendCavaBotMessage(promptText, 'user');
+
+    setTimeout(() => {
+      const responseHtml = processCavaBotQuery(promptText);
+      appendCavaBotMessage(responseHtml, 'bot');
+    }, 250);
+  };
+
+  window.handleCavaBotSubmit = function (e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const input = document.getElementById('cavabot-input');
+    if (input && input.value.trim()) {
+      window.askCavaBot(input.value.trim());
+    }
+  };
+
+  function appendCavaBotMessage(contentHtml, sender = 'bot') {
+    const msgs = document.getElementById('cavabot-messages');
+    if (!msgs) return;
+
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `cavabot-msg cavabot-msg-${sender}`;
+    msgDiv.innerHTML = `
+      <div class="cavabot-bubble">${contentHtml}</div>
+      <div class="cavabot-msg-time">${timeStr}</div>
+    `;
+
+    msgs.appendChild(msgDiv);
+    msgs.scrollTop = msgs.scrollHeight;
+    if (window.lucide) window.lucide.createIcons({ scope: msgDiv });
+  }
+
+  function processCavaBotQuery(rawPrompt) {
+    const prompt = (rawPrompt || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // 1. CONSULTAS DE VENTAS / FACTURACIÓN (Quincenas / Meses / Rangos)
+    if (prompt.includes('vendi') || prompt.includes('factur') || prompt.includes('ventas') || prompt.includes('recaud')) {
+      return answerVentasQuery(prompt, rawPrompt);
+    }
+
+    // 2. CONSULTAS DE STOCK / TOP VINOS / REPOSICIÓN / VALORACIÓN
+    if (prompt.includes('stock') || prompt.includes('vino') || prompt.includes('botella') || prompt.includes('reponer') || prompt.includes('valor')) {
+      return answerStockQuery(prompt, rawPrompt);
+    }
+
+    // 3. CONSULTAS DE CLIENTES / MEMBRESÍAS
+    if (prompt.includes('cliente') || prompt.includes('membresia') || prompt.includes('elite') || prompt.includes('seleccion')) {
+      return answerClientesQuery(prompt, rawPrompt);
+    }
+
+    // 4. CONSULTAS DE PROVEEDORES / COMPRAS
+    if (prompt.includes('proveedor') || prompt.includes('compra') || prompt.includes('entrada')) {
+      return answerProveedoresQuery(prompt, rawPrompt);
+    }
+
+    // 5. RESUMEN GENERAL / SALUDOS / AYUDA
+    return answerGeneralQuery(prompt, rawPrompt);
+  }
+
+  function answerVentasQuery(prompt, rawPrompt) {
+    let year = 2026;
+    let month = 8; // Default: Septiembre (0-indexed 8)
+
+    if (prompt.includes('septiembre') || prompt.includes('setiembre')) month = 8;
+    else if (prompt.includes('agosto')) month = 7;
+    else if (prompt.includes('julio')) month = 6;
+    else if (prompt.includes('junio')) month = 5;
+    else if (prompt.includes('mayo')) month = 4;
+    else if (prompt.includes('abril')) month = 3;
+    else if (prompt.includes('marzo')) month = 2;
+    else if (prompt.includes('febrero')) month = 1;
+    else if (prompt.includes('enero')) month = 0;
+    else if (prompt.includes('octubre')) month = 9;
+    else if (prompt.includes('noviembre')) month = 10;
+    else if (prompt.includes('diciembre')) month = 11;
+    else if (prompt.includes('este mes')) month = new Date().getMonth();
+    else if (prompt.includes('mes pasado')) {
+      month = new Date().getMonth() - 1;
+      if (month < 0) { month = 11; year -= 1; }
+    }
+
+    let is2ndQuincena = prompt.includes('2da') || prompt.includes('segunda') || prompt.includes('16');
+    let is1stQuincena = prompt.includes('1ra') || prompt.includes('primera') || prompt.includes(' 1') || prompt.includes('15');
+
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const monthName = monthNames[month] || 'Septiembre';
+
+    let dayFrom = 1;
+    let dayTo = 31;
+    let periodTitle = `Todo el mes de ${monthName} ${year}`;
+
+    if (is2ndQuincena) {
+      dayFrom = 16;
+      dayTo = 31;
+      periodTitle = `2da Quincena de ${monthName} (16 al 31 de ${monthName} ${year})`;
+    } else if (is1stQuincena) {
+      dayFrom = 1;
+      dayTo = 15;
+      periodTitle = `1ra Quincena de ${monthName} (1 al 15 de ${monthName} ${year})`;
+    }
+
+    const pad = n => String(n).padStart(2, '0');
+    const fromStr = `${year}-${pad(month + 1)}-${pad(dayFrom)}`;
+    const toStr = `${year}-${pad(month + 1)}-${pad(dayTo)}`;
+
+    const filteredSalidas = (state.salidas || []).filter(s => {
+      const f = (s.fecha || '').substring(0, 10);
+      if (!f) return false;
+      return f >= fromStr && f <= toStr;
+    });
+
+    const totalFacturado = filteredSalidas.reduce((sum, s) => sum + ((Number(s.precioUnitario) || 0) * (Number(s.cantidadBotellas) || 0)), 0);
+    const totalBotellas = filteredSalidas.reduce((sum, s) => sum + (Number(s.cantidadBotellas) || 0), 0);
+    const totalOps = filteredSalidas.length;
+    const totalGanancia = filteredSalidas.reduce((sum, s) => sum + (Number(s.gananciaNominal) || 0), 0);
+
+    const porMembresia = filteredSalidas.filter(s => s.tipoVenta === 'MEMBRESIA');
+    const porDirecta = filteredSalidas.filter(s => s.tipoVenta !== 'MEMBRESIA');
+
+    const botMemb = porMembresia.reduce((sum, s) => sum + (Number(s.cantidadBotellas) || 0), 0);
+    const botDirecta = porDirecta.reduce((sum, s) => sum + (Number(s.cantidadBotellas) || 0), 0);
+
+    if (filteredSalidas.length === 0) {
+      return `
+        📊 <strong>Ventas - ${periodTitle}</strong>
+        <br><br>
+        No se registraron ventas en la base de datos para el período seleccionado (<strong>${fromStr}</strong> al <strong>${toStr}</strong>).
+      `;
+    }
+
+    return `
+      📊 <strong>Ventas & Facturación - ${periodTitle}</strong>
+      <div class="cavabot-card-stat">
+        <div style="margin-bottom:0.3rem;">💵 <strong>Facturación Total:</strong> <span class="text-gold" style="font-size:1.05rem; font-weight:bold;">${formatCurrency(totalFacturado)}</span></div>
+        <div style="margin-bottom:0.3rem;">🍷 <strong>Botellas Vendidas:</strong> <strong>${totalBotellas}</strong> unidades (${botMemb} por Membresía / ${botDirecta} Directas)</div>
+        <div style="margin-bottom:0.3rem;">📦 <strong>Operaciones de Venta:</strong> <strong>${totalOps}</strong> transacciones</div>
+        <div>📈 <strong>Ganancia Estimada FIFO:</strong> <span style="color:var(--emerald); font-weight:bold;">${formatCurrency(totalGanancia)}</span></div>
+      </div>
+    `;
+  }
+
+  function answerStockQuery(prompt, rawPrompt) {
+    if (prompt.includes('valor') || prompt.includes('cava')) {
+      let valuation = 0;
+      let totalBottles = 0;
+      (state.articulos || []).forEach(a => {
+        const m = getArticuloMetrics(a.id);
+        totalBottles += m.stock;
+        valuation += (m.stock * (m.ultimoCostoUnitario || 0));
+      });
+      return `
+        💰 <strong>Valoración de la Cava en Stock</strong>
+        <div class="cavabot-card-stat">
+          <div style="margin-bottom:0.3rem;">🍷 <strong>Total Botellas en Cava:</strong> <strong>${totalBottles}</strong> unidades</div>
+          <div>💵 <strong>Valoración Total de Costo:</strong> <span class="text-gold" style="font-size:1.05rem; font-weight:bold;">${formatCurrency(valuation)}</span></div>
+        </div>
+      `;
+    }
+
+    const isLowStock = prompt.includes('bajo') || prompt.includes('reponer') || prompt.includes('menos') || prompt.includes('alerta');
+    const sortedArts = getSortedArticulos();
+
+    if (isLowStock) {
+      const lowStockList = sortedArts.filter(a => {
+        if (a.noReponer) return false;
+        const m = getArticuloMetrics(a.id);
+        return m.stock < 12;
+      }).sort((a, b) => getArticuloMetrics(a.id).stock - getArticuloMetrics(b.id).stock);
+
+      if (lowStockList.length === 0) {
+        return `✅ <strong>Estado de Stock Excelente:</strong> No hay vinos con stock bajo (< 12 botellas) pendientes de reposición.`;
+      }
+
+      let tableRows = lowStockList.slice(0, 7).map(a => {
+        const m = getArticuloMetrics(a.id);
+        return `<tr><td><strong>${a.bodega}</strong> - ${a.etiqueta}</td><td>${a.cepa}</td><td><strong class="text-rose">${m.stock} bot.</strong></td></tr>`;
+      }).join('');
+
+      return `
+        ⚠️ <strong>Vinos con Stock Bajo / Pendientes de Reposición:</strong>
+        <table class="cavabot-table">
+          <thead><tr><th>Vino</th><th>Cepa</th><th>Stock Actual</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      `;
+    }
+
+    // Default: Top 5 Highest Stock
+    const topStockList = [...sortedArts].sort((a, b) => getArticuloMetrics(b.id).stock - getArticuloMetrics(a.id).stock).slice(0, 5);
+
+    let tableRows = topStockList.map((a, idx) => {
+      const m = getArticuloMetrics(a.id);
+      return `<tr><td><strong>#${idx + 1} ${a.bodega}</strong> - ${a.etiqueta}</td><td>${a.cepa}</td><td><strong class="text-gold">${m.stock} bot.</strong> (${m.cajasCompletas} cj + ${m.botellasSueltas} un)</td></tr>`;
+    }).join('');
+
+    return `
+      🍷 <strong>Top 5 Vinos con Mayor Stock en Cava:</strong>
+      <table class="cavabot-table">
+        <thead><tr><th>Vino / Etiqueta</th><th>Cepa</th><th>Stock en Cava</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    `;
+  }
+
+  function answerClientesQuery(prompt, rawPrompt) {
+    const totalClientes = (state.clientes || []).length;
+    let eliteCount = 0;
+    let seleccionCount = 0;
+    let sinMembCount = 0;
+
+    (state.clientes || []).forEach(c => {
+      const tipo = getClienteMembresiaTipo(c);
+      if (tipo === 'Élite') eliteCount++;
+      else if (tipo === 'Selección') seleccionCount++;
+      else sinMembCount++;
+    });
+
+    if (prompt.includes('mejor') || prompt.includes('top') || prompt.includes('comprador')) {
+      const clientStats = new Map();
+      (state.salidas || []).forEach(s => {
+        const cId = s.clienteId;
+        const total = (Number(s.precioUnitario) || 0) * (Number(s.cantidadBotellas) || 0);
+        const bot = Number(s.cantidadBotellas) || 0;
+        if (!clientStats.has(cId)) {
+          clientStats.set(cId, { totalDinero: 0, totalBotellas: 0 });
+        }
+        const curr = clientStats.get(cId);
+        curr.totalDinero += total;
+        curr.totalBotellas += bot;
+      });
+
+      const topClients = Array.from(clientStats.entries())
+        .sort((a, b) => b[1].totalDinero - a[1].totalDinero)
+        .slice(0, 5);
+
+      let rows = topClients.map(([cId, stats], idx) => {
+        const c = state.clientes.find(cli => String(cli.id) === String(cId));
+        const cName = c ? `${c.nombre} ${c.apellido}` : 'Cliente N/A';
+        const mTipo = c ? getClienteMembresiaTipo(c) : '';
+        return `<tr><td><strong>#${idx + 1} ${cName}</strong> ${mTipo ? `<span class="badge badge-info">${mTipo}</span>` : ''}</td><td>${stats.totalBotellas} bot.</td><td><strong class="text-gold">${formatCurrency(stats.totalDinero)}</strong></td></tr>`;
+      }).join('');
+
+      return `
+        👑 <strong>Top 5 Clientes con Mayor Facturación Histórica:</strong>
+        <table class="cavabot-table">
+          <thead><tr><th>Cliente</th><th>Botellas</th><th>Total Compras</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    return `
+      👥 <strong>Resumen de Clientes y Membresías BORRA:</strong>
+      <div class="cavabot-card-stat">
+        <div style="margin-bottom:0.3rem;">📋 <strong>Total Clientes Registrados:</strong> <strong>${totalClientes}</strong> clientes</div>
+        <div style="margin-bottom:0.3rem;">👑 <strong>Membresía Élite:</strong> <span class="badge badge-warning">${eliteCount} miembros</span></div>
+        <div style="margin-bottom:0.3rem;">🍷 <strong>Membresía Selección:</strong> <span class="badge badge-info">${seleccionCount} miembros</span></div>
+        <div>👤 <strong>Sin Membresía / Público General:</strong> ${sinMembCount} clientes</div>
+      </div>
+    `;
+  }
+
+  function answerProveedoresQuery(prompt, rawPrompt) {
+    const totalProvs = (state.proveedores || []).length;
+    const totalEntradas = (state.entradas || []).length;
+    const totalInversion = (state.entradas || []).reduce((sum, e) => sum + ((Number(e.precioCaja) || 0) * (Number(e.cantidadCajas) || 0)), 0);
+
+    return `
+      📦 <strong>Gestión de Proveedores y Compras:</strong>
+      <div class="cavabot-card-stat">
+        <div style="margin-bottom:0.3rem;">🏢 <strong>Proveedores Registrados:</strong> <strong>${totalProvs}</strong> distribuidores</div>
+        <div style="margin-bottom:0.3rem;">🧾 <strong>Compras Registradas:</strong> <strong>${totalEntradas}</strong> operaciones</div>
+        <div>💵 <strong>Inversión Total Acumulada:</strong> <span class="text-gold" style="font-size:1.05rem; font-weight:bold;">${formatCurrency(totalInversion)}</span></div>
+      </div>
+    `;
+  }
+
+  function answerGeneralQuery(prompt, rawPrompt) {
+    return `
+      🤖 <strong>CavaBot a tu servicio:</strong>
+      <br>
+      Puedo responder datos en tiempo real sobre tu emprendimiento de vinos.
+      <br><br>
+      💡 <strong>Ejemplos de preguntas que podés hacerme:</strong>
+      <ul>
+        <li><em>"¿Cuánto vendí en la segunda quincena de septiembre?"</em></li>
+        <li><em>"¿Cuáles son los 5 vinos que más stock tienen?"</em></li>
+        <li><em>"¿Qué vinos tienen stock bajo o hay que reponer?"</em></li>
+        <li><em>"¿Quiénes son mis mejores clientes?"</em></li>
+        <li><em>"¿Cuál es el valor total de la cava?"</em></li>
+      </ul>
+    `;
+  }
+
   // Initialize
   loadState();
 
