@@ -29,6 +29,7 @@
   let activeTabId = 'dashboard';
   let idCounter = 0;
   let syncTimeout = null;
+  let isSyncing = false;
 
   // Tipos de Membresía por defecto
   const DEFAULT_TIPOS_MEMBRESIA = ['Selección', 'Élite'];
@@ -444,11 +445,17 @@
     return modified;
   }
 
-  async function loadState() {
+  async function loadState(force = false) {
+    if (!force && (isSyncing || syncTimeout)) {
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/db?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
+        if (!force && (isSyncing || syncTimeout || (typeof modalOverlay !== 'undefined' && modalOverlay && modalOverlay.classList.contains('active')))) {
+          return;
+        }
         if (data.articulos && Array.isArray(data.articulos) && data.articulos.length > 0) {
           state = data;
           if (!Array.isArray(state.usuarios)) state.usuarios = [];
@@ -521,11 +528,15 @@
       return;
     }
 
-    if (syncTimeout) clearTimeout(syncTimeout);
+    if (syncTimeout) {
+      clearTimeout(syncTimeout);
+      syncTimeout = null;
+    }
     if (immediate) {
       triggerBackgroundSqlServerSync();
     } else {
       syncTimeout = setTimeout(() => {
+        syncTimeout = null;
         triggerBackgroundSqlServerSync();
       }, 200);
     }
@@ -535,6 +546,7 @@
     if (!state || !hasAnyStateData()) {
       return;
     }
+    isSyncing = true;
     try {
       const res = await fetch(`${API_URL}/db/sync`, {
         method: 'POST',
@@ -557,6 +569,8 @@
       lastDbErrorMessage = e.message || 'Sin conexión con el servidor API/Base de Datos';
       updateSqlBadge(false, lastDbErrorMessage);
       showToast(`❌ ERROR DE CONEXIÓN: No se pudo guardar en la Base de Datos. ${lastDbErrorMessage}`, 'error');
+    } finally {
+      isSyncing = false;
     }
   }
 
@@ -739,9 +753,9 @@
     };
   }
 
-  window.recalculateAllSalidasFifo = function (notify = false) {
+  window.recalculateAllSalidasFifo = function (notify = false, shouldSave = true) {
     if (!state.salidas || state.salidas.length === 0) {
-      if (notify) showToast('No hay ventas para recalar', 'info');
+      if (notify) showToast('No hay ventas para recalcular', 'info');
       return;
     }
 
@@ -764,8 +778,10 @@
       updatedCount++;
     });
 
-    saveState();
-    renderAllViews();
+    if (shouldSave) {
+      saveState();
+      renderAllViews();
+    }
     if (notify) {
       showToast(`Ganancias PEPS recalculadas exitosamente en ${updatedCount} ventas`, 'success');
     }
@@ -2426,9 +2442,10 @@
       const email = document.getElementById('prov-email').value.trim();
 
       if (isEdit) {
-        prov.nombre = nombre;
-        prov.telefono = telefono;
-        prov.email = email;
+        const targetProv = (state.proveedores || []).find(p => String(p.id) === String(proveedorId)) || prov;
+        targetProv.nombre = nombre;
+        targetProv.telefono = telefono;
+        targetProv.email = email;
         logAuditoria('Proveedores', 'Edición de Proveedor', `Se actualizó el proveedor ${nombre}`);
         showToast('Proveedor actualizado exitosamente', 'success');
       } else {
@@ -2442,7 +2459,7 @@
         showToast('Proveedor creado exitosamente', 'success');
       }
 
-      saveState();
+      saveState(true);
       closeModal();
       renderAllViews();
     });
@@ -2560,12 +2577,13 @@
       }
 
       if (isEdit) {
-        art.bodega = bodega;
-        art.etiqueta = etiqueta;
-        art.cepa = cepa;
-        art.uxb = uxb;
-        art.noReponer = noReponer;
-        art.proveedoresIds = checkedProvs;
+        const targetArt = (state.articulos || []).find(a => String(a.id) === String(articuloId)) || art;
+        targetArt.bodega = bodega;
+        targetArt.etiqueta = etiqueta;
+        targetArt.cepa = cepa;
+        targetArt.uxb = uxb;
+        targetArt.noReponer = noReponer;
+        targetArt.proveedoresIds = checkedProvs;
         logAuditoria('Artículos', 'Edición de Artículo', `Se actualizó el artículo ${bodega} - ${etiqueta}${noReponer ? ' (No Reponer)' : ''}`);
         showToast('Artículo actualizado', 'success');
       } else {
@@ -2582,7 +2600,7 @@
         showToast('Artículo creado exitosamente', 'success');
       }
 
-      saveState();
+      saveState(true);
       closeModal();
       renderAllViews();
     });
@@ -2810,15 +2828,16 @@
       }
 
       if (isEdit) {
-        memb.tipo = tipo;
-        memb.codigo = codigo;
-        memb.descripcion = descripcion;
-        memb.items = items;
-        memb.fechaDesde = fechaDesde;
-        memb.fechaHasta = fechaHasta;
-        memb.precio = precio;
-        delete memb.articuloId;
-        delete memb.cantidad;
+        const targetMemb = (state.membresias || []).find(m => String(m.id) === String(membresiaId)) || memb;
+        targetMemb.tipo = tipo;
+        targetMemb.codigo = codigo;
+        targetMemb.descripcion = descripcion;
+        targetMemb.items = items;
+        targetMemb.fechaDesde = fechaDesde;
+        targetMemb.fechaHasta = fechaHasta;
+        targetMemb.precio = precio;
+        delete targetMemb.articuloId;
+        delete targetMemb.cantidad;
         logAuditoria('Membresías', 'Edición de Membresía', `Se actualizó la membresía [${tipo}] ${codigo} - ${descripcion} (Precio: $${precio})`);
         showToast('Membresía actualizada', 'success');
       } else {
@@ -2836,7 +2855,7 @@
         showToast('Membresía creada exitosamente', 'success');
       }
 
-      saveState();
+      saveState(true);
       closeModal();
       renderAllViews();
     });
@@ -2948,15 +2967,16 @@
       const membresiaId = document.getElementById('cli-membresia').value;
 
       if (isEdit) {
-        cli.nombre = nombre;
-        cli.apellido = apellido;
-        cli.contacto = contacto;
-        cli.fechaNacimiento = fechaNacimiento;
-        cli.telefono = telefono;
-        cli.provincia = provincia;
-        cli.localidad = localidad;
-        cli.direccion = direccion;
-        cli.membresiaId = membresiaId;
+        const targetCli = (state.clientes || []).find(c => String(c.id) === String(clienteId)) || cli;
+        targetCli.nombre = nombre;
+        targetCli.apellido = apellido;
+        targetCli.contacto = contacto;
+        targetCli.fechaNacimiento = fechaNacimiento;
+        targetCli.telefono = telefono;
+        targetCli.provincia = provincia;
+        targetCli.localidad = localidad;
+        targetCli.direccion = direccion;
+        targetCli.membresiaId = membresiaId;
         logAuditoria('Clientes', 'Edición de Cliente', `Se actualizó el cliente ${nombre} ${apellido}`);
         showToast('Cliente actualizado', 'success');
       } else {
@@ -2976,7 +2996,7 @@
         showToast('Cliente registrado exitosamente', 'success');
       }
 
-      saveState();
+      saveState(true);
       closeModal();
       renderAllViews();
     });
@@ -3207,8 +3227,8 @@
       const formatoStr = isBotella ? `${unidadesSumadas} botellas sueltas` : `${cantidadCajas} cajas (${unidadesSumadas} botellas)`;
       logAuditoria('Entradas', 'Registro de Compra', `Compra #${nextNumeroCompra}: ${formatoStr} de ${art.bodega} ${art.etiqueta} a ${prov ? prov.nombre : 'Proveedor'}`);
 
-      recalculateAllSalidasFifo(false);
-      saveState();
+      recalculateAllSalidasFifo(false, false);
+      saveState(true);
       closeModal();
       renderAllViews();
       showToast(`Entrada registrada (#${nextNumeroCompra}). +${unidadesSumadas} botellas agregadas al stock y ganancias PEPS actualizadas!`, 'success');
@@ -3219,27 +3239,40 @@
     const eObj = (state.entradas || []).find(e => String(e.id) === String(entradaId));
     if (!eObj) return;
 
-    const art = (state.articulos || []).find(a => String(a.id) === String(eObj.articuloId));
-    const prov = (state.proveedores || []).find(p => String(p.id) === String(eObj.proveedorId));
+    const sortedArts = getSortedArticulos();
+    const artOptions = sortedArts.map(a => `
+      <option value="${a.id}" ${String(a.id) === String(eObj.articuloId) ? 'selected' : ''}>
+        ${a.bodega} - ${a.etiqueta} (${a.cepa})
+      </option>
+    `).join('');
 
     const isBot = eObj.unidadEntrada === 'BOTELLA';
-    const initCant = isBot ? eObj.unidadesSumadas : eObj.cantidadCajas;
+    const initCant = isBot ? (Number(eObj.unidadesSumadas) || 1) : (Number(eObj.cantidadCajas) || 1);
 
     const html = `
       <form id="form-edit-entrada">
-        <div class="form-group">
-          <label>Artículo / Vino</label>
-          <input type="text" class="form-control" value="${art ? art.bodega + ' - ' + art.etiqueta + ' (' + art.cepa + ')' : 'Vino'}" readonly style="opacity:0.8;">
+        <div class="form-row">
+          <div class="form-group" style="flex:2;">
+            <label>Artículo / Vino *</label>
+            <select id="edit-ent-articulo" class="form-control" required>
+              ${artOptions}
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>N° Compra</label>
+            <input type="number" class="form-control" value="${eObj.numeroCompra}" readonly style="opacity:0.8;">
+          </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label>Proveedor</label>
-            <input type="text" class="form-control" value="${prov ? prov.nombre : 'N/A'}" readonly style="opacity:0.8;">
+            <label>Proveedor *</label>
+            <select id="edit-ent-proveedor" class="form-control" required>
+            </select>
           </div>
           <div class="form-group">
-            <label>N° Compra</label>
-            <input type="number" class="form-control" value="${eObj.numeroCompra}" readonly style="opacity:0.8;">
+            <label>Fecha de Compra *</label>
+            <input type="date" id="edit-ent-fecha" class="form-control" value="${(eObj.fecha || '').substring(0,10)}" required>
           </div>
         </div>
 
@@ -3257,20 +3290,25 @@
             <input type="number" id="edit-ent-cajas" class="form-control" min="1" value="${initCant}" required>
           </div>
           <div class="form-group">
-            <label id="lbl-edit-precio">${isBot ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *'}</label>
-            <input type="number" id="edit-ent-precio-caja" class="form-control" min="0" step="any" value="${eObj.precioCaja}" required>
+            <label>Unidades Sumadas (al Stock)</label>
+            <input type="text" id="edit-ent-unidades-calc" class="form-control" readonly value="0 botellas" style="opacity:0.9;">
           </div>
         </div>
 
         <div class="form-row">
           <div class="form-group">
+            <label id="lbl-edit-precio">${isBot ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *'}</label>
+            <input type="number" id="edit-ent-precio-caja" class="form-control" min="0" step="any" value="${eObj.precioCaja}" required>
+          </div>
+          <div class="form-group">
             <label id="lbl-edit-adic">${isBot ? 'Costo Adicional por Botella ($)' : 'Costo Adicional por Caja ($)'}</label>
             <input type="number" id="edit-ent-costo-adic" class="form-control" min="0" step="any" value="${eObj.costoAdicionalCaja || 0}">
           </div>
-          <div class="form-group">
-            <label>Fecha de Compra</label>
-            <input type="date" id="edit-ent-fecha" class="form-control" value="${(eObj.fecha || '').substring(0,10)}">
-          </div>
+        </div>
+
+        <div class="form-group">
+          <label id="lbl-edit-costo-botella">Costo Resultante por Botella</label>
+          <input type="text" id="edit-ent-costo-botella-calc" class="form-control" readonly value="$0" style="font-weight:bold; font-size:1.02rem; color:var(--emerald);">
         </div>
 
         <div class="form-row">
@@ -3293,46 +3331,111 @@
 
     openModal(`Editar Compra / Costo #${eObj.numeroCompra}`, html);
 
+    const selEditArticulo = document.getElementById('edit-ent-articulo');
+    const selEditProveedor = document.getElementById('edit-ent-proveedor');
     const selEditUnidad = document.getElementById('edit-ent-unidad');
+    const inpEditCajas = document.getElementById('edit-ent-cajas');
+    const inpEditPrecio = document.getElementById('edit-ent-precio-caja');
+    const inpEditAdic = document.getElementById('edit-ent-costo-adic');
+    const inpUnidadesCalc = document.getElementById('edit-ent-unidades-calc');
+    const inpCostoBotCalc = document.getElementById('edit-ent-costo-botella-calc');
+
     const lblEditCajas = document.getElementById('lbl-edit-cajas');
     const lblEditPrecio = document.getElementById('lbl-edit-precio');
     const lblEditAdic = document.getElementById('lbl-edit-adic');
+    const lblEditCostoBotella = document.getElementById('lbl-edit-costo-botella');
 
-    selEditUnidad.addEventListener('change', () => {
+    function updateEditProvs(selectedProvId) {
+      const artId = selEditArticulo.value;
+      const currentArt = (state.articulos || []).find(a => String(a.id) === String(artId));
+      const allProvs = state.proveedores || [];
+      let allowedProvs = currentArt
+        ? allProvs.filter(p => (currentArt.proveedoresIds || []).some(pid => String(pid) === String(p.id)))
+        : allProvs;
+      if (allowedProvs.length === 0) allowedProvs = allProvs;
+
+      // Ensure current provider is always in the list
+      if (selectedProvId && !allowedProvs.some(p => String(p.id) === String(selectedProvId))) {
+        const existingProv = allProvs.find(p => String(p.id) === String(selectedProvId));
+        if (existingProv) allowedProvs = [existingProv, ...allowedProvs];
+      }
+
+      selEditProveedor.innerHTML = allowedProvs.map(p => `
+        <option value="${p.id}" ${String(p.id) === String(selectedProvId) ? 'selected' : ''}>${p.nombre}</option>
+      `).join('');
+    }
+
+    function updateEditCalcPreview() {
       const isB = selEditUnidad.value === 'BOTELLA';
       lblEditCajas.textContent = isB ? 'Cantidad de Botellas *' : 'Cantidad de Cajas *';
       lblEditPrecio.textContent = isB ? 'Precio por Botella ($) *' : 'Precio por Caja ($) *';
       lblEditAdic.textContent = isB ? 'Costo Adicional por Botella ($)' : 'Costo Adicional por Caja ($)';
+      lblEditCostoBotella.textContent = isB ? 'Costo Resultante por Botella (Precio + Costo Adic.)' : 'Costo Resultante por Botella [(Precio Caja + Costo Adic.) / UxB]';
+
+      const artId = selEditArticulo.value;
+      const currentArt = (state.articulos || []).find(a => String(a.id) === String(artId));
+      const uxb = currentArt ? (Number(currentArt.uxb) || 6) : 6;
+      const cantVal = parseInt(inpEditCajas.value, 10) || 0;
+      const unidadesSumadas = isB ? cantVal : (cantVal * uxb);
+
+      inpUnidadesCalc.value = isB ? `${unidadesSumadas} botellas sueltas` : `${unidadesSumadas} botellas (${cantVal} cj. de ${uxb} uxb)`;
+
+      const precioVal = parseFloat(inpEditPrecio.value) || 0;
+      const adicVal = parseFloat(inpEditAdic.value) || 0;
+      const unitCost = isB ? (precioVal + adicVal) : ((precioVal + adicVal) / uxb);
+      const totalCompra = isB ? (unidadesSumadas * unitCost) : (cantVal * (precioVal + adicVal));
+
+      inpCostoBotCalc.value = `${formatCurrency(unitCost)} / botella (Total compra: ${formatCurrency(totalCompra)})`;
+    }
+
+    updateEditProvs(eObj.proveedorId);
+    updateEditCalcPreview();
+
+    selEditArticulo.addEventListener('change', () => {
+      updateEditProvs(selEditProveedor.value);
+      updateEditCalcPreview();
     });
+    selEditUnidad.addEventListener('change', updateEditCalcPreview);
+    inpEditCajas.addEventListener('input', updateEditCalcPreview);
+    inpEditPrecio.addEventListener('input', updateEditCalcPreview);
+    inpEditAdic.addEventListener('input', updateEditCalcPreview);
 
     document.getElementById('form-edit-entrada').addEventListener('submit', (e) => {
       e.preventDefault();
+      const targetEnt = (state.entradas || []).find(item => String(item.id) === String(entradaId)) || eObj;
+      const newArticuloId = selEditArticulo.value || targetEnt.articuloId;
+      const newProveedorId = selEditProveedor.value || targetEnt.proveedorId;
+      const selectedArt = (state.articulos || []).find(a => String(a.id) === String(newArticuloId));
+
       const unidadEntrada = selEditUnidad.value;
       const isB = unidadEntrada === 'BOTELLA';
-      const cantVal = parseInt(document.getElementById('edit-ent-cajas').value, 10) || 1;
-      const precioCaja = parseFloat(document.getElementById('edit-ent-precio-caja').value) || 0;
-      const costoAdic = parseFloat(document.getElementById('edit-ent-costo-adic').value) || 0;
-      const fecha = document.getElementById('edit-ent-fecha').value || eObj.fecha;
+      const cantVal = parseInt(inpEditCajas.value, 10) || 1;
+      const precioCaja = parseFloat(inpEditPrecio.value) || 0;
+      const costoAdic = parseFloat(inpEditAdic.value) || 0;
+      const fecha = document.getElementById('edit-ent-fecha').value || targetEnt.fecha;
       const pvPublico = parseFloat(document.getElementById('edit-ent-pv-publico').value) || 0;
       const pvClub = parseFloat(document.getElementById('edit-ent-pv-club').value) || 0;
 
-      const uxb = art ? (Number(art.uxb) || 6) : 6;
-      eObj.unidadEntrada = unidadEntrada;
-      eObj.cantidadCajas = isB ? Math.floor(cantVal / uxb) : cantVal;
-      eObj.unidadesSumadas = isB ? cantVal : (cantVal * uxb);
-      eObj.precioCaja = precioCaja;
-      eObj.costoAdicionalCaja = costoAdic;
-      eObj.fecha = fecha;
-      eObj.precioVentaPublico = pvPublico;
-      eObj.precioVentaClub = pvClub;
+      const uxb = selectedArt ? (Number(selectedArt.uxb) || 6) : 6;
+      targetEnt.articuloId = newArticuloId;
+      if (selectedArt) targetEnt.cepa = selectedArt.cepa;
+      targetEnt.proveedorId = newProveedorId;
+      targetEnt.unidadEntrada = unidadEntrada;
+      targetEnt.cantidadCajas = isB ? Math.floor(cantVal / uxb) : cantVal;
+      targetEnt.unidadesSumadas = isB ? cantVal : (cantVal * uxb);
+      targetEnt.precioCaja = precioCaja;
+      targetEnt.costoAdicionalCaja = costoAdic;
+      targetEnt.fecha = fecha;
+      targetEnt.precioVentaPublico = pvPublico;
+      targetEnt.precioVentaClub = pvClub;
 
-      logAuditoria('Entradas', 'Edición de Compra', `Se actualizaron los costos y precios de Compra #${eObj.numeroCompra}`);
+      logAuditoria('Entradas', 'Edición de Compra', `Se actualizaron los costos y precios de Compra #${targetEnt.numeroCompra}`);
 
-      recalculateAllSalidasFifo(false);
+      recalculateAllSalidasFifo(false, false);
       saveState(true);
       closeModal();
       renderAllViews();
-      showToast(`Compra #${eObj.numeroCompra} actualizada. Costos y ganancias PEPS recalculados!`, 'success');
+      showToast(`Compra #${targetEnt.numeroCompra} actualizada. Costos y ganancias PEPS recalculados!`, 'success');
     });
   };
 
@@ -3343,7 +3446,7 @@
     if (confirm(`¿Desea eliminar la Compra #${eObj.numeroCompra}? Esto recalculará las ganancias PEPS de las ventas.`)) {
       state.entradas = state.entradas.filter(e => String(e.id) !== String(entradaId));
       logAuditoria('Entradas', 'Eliminación de Compra', `Se eliminó la Compra #${eObj.numeroCompra}`);
-      recalculateAllSalidasFifo(false);
+      recalculateAllSalidasFifo(false, false);
       saveState(true);
       renderAllViews();
       showToast(`Compra #${eObj.numeroCompra} eliminada. Ganancias PEPS recalculadas.`, 'success');
@@ -4474,7 +4577,10 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      loadState();
+      const isModalOpen = modalOverlay && modalOverlay.classList.contains('active');
+      if (!isModalOpen && !syncTimeout && !isSyncing) {
+        loadState();
+      }
     }
   });
 
@@ -4979,17 +5085,96 @@
     if (window.lucide) window.lucide.createIcons({ scope: msgs });
   }
 
-  window.askCavaBot = function (promptText) {
+  window.openCavaBotSettings = function () {
+    const currentKey = localStorage.getItem('cavabot_gemini_api_key') || '';
+    const html = `
+      <form id="form-cavabot-settings">
+        <div class="form-group">
+          <label><i data-lucide="key"></i> Clave de API de Google Gemini AI (100% Gratuita)</label>
+          <input type="password" id="cavabot-key-input" class="form-control" value="${currentKey}" placeholder="Ej: AIzaSy...">
+          <small class="text-muted" style="display:block; margin-top:0.4rem;">
+            💡 Obtené tu clave 100% gratuita en 10 segundos registrándote en <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--gold-accent); text-decoration:underline;">Google AI Studio</a>.
+          </small>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="window.closeModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Clave de IA</button>
+        </div>
+      </form>
+    `;
+    openModal('🤖 Configuración de Inteligencia Artificial (CavaBot)', html);
+
+    document.getElementById('form-cavabot-settings').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const val = document.getElementById('cavabot-key-input').value.trim();
+      localStorage.setItem('cavabot_gemini_api_key', val);
+      closeModal();
+      showToast(val ? 'Clave de IA de Gemini configurada correctamente.' : 'Clave de IA removida.', val ? 'success' : 'info');
+    });
+  };
+
+  window.askCavaBot = async function (promptText) {
     if (!promptText || !promptText.trim()) return;
     const input = document.getElementById('cavabot-input');
     if (input) input.value = '';
 
     appendCavaBotMessage(promptText, 'user');
 
-    setTimeout(() => {
-      const responseHtml = processCavaBotQuery(promptText);
-      appendCavaBotMessage(responseHtml, 'bot');
-    }, 250);
+    const apiKey = localStorage.getItem('cavabot_gemini_api_key') || '';
+
+    if (apiKey) {
+      const typingDiv = appendCavaBotMessage('✨ <em>CavaBot con IA de Gemini está analizando tus datos en vivo...</em>', 'bot');
+      try {
+        const res = await fetch(`${API_URL}/ai/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: promptText,
+            apiKey: apiKey,
+            state: state
+          })
+        });
+
+        const data = await res.json();
+        if (typingDiv) typingDiv.remove();
+
+        if (res.ok && data.success) {
+          appendCavaBotMessage(data.reply, 'bot');
+        } else if (data.code === 'NO_API_KEY') {
+          appendCavaBotMessage(`
+            🔑 <strong>Configurar Inteligencia Artificial Real:</strong>
+            <br>
+            Para activar las respuestas con IA avanzada (Google Gemini), configurá tu clave de API gratuita en el ícono ⚙️ de la barra superior del chat o hacé clic abajo.
+            <br><br>
+            <button class="btn btn-sm btn-primary" onclick="window.openCavaBotSettings()"><i data-lucide="key"></i> Configurar Clave de IA Gratuita</button>
+          `, 'bot');
+        } else {
+          const fallbackHtml = processCavaBotQuery(promptText);
+          appendCavaBotMessage(`
+            ${fallbackHtml}
+            <br><small class="text-muted" style="font-size:0.75rem; display:block; margin-top:0.5rem;">⚠️ Nota de IA: ${data.error || data.message || 'Respuesta generada por motor local'}</small>
+          `, 'bot');
+        }
+      } catch (e) {
+        if (typingDiv) typingDiv.remove();
+        const fallbackHtml = processCavaBotQuery(promptText);
+        appendCavaBotMessage(fallbackHtml, 'bot');
+      }
+    } else {
+      setTimeout(() => {
+        const responseHtml = processCavaBotQuery(promptText);
+        appendCavaBotMessage(`
+          ${responseHtml}
+          <div style="margin-top:0.75rem; padding-top:0.5rem; border-top:1px dashed var(--border-color); font-size:0.78rem; color:var(--text-muted);">
+            💡 <em>¿Querés análisis más avanzados y razonamiento conversacional como ChatGPT/Gemini?</em>
+            <br>
+            <a href="javascript:void(0)" onclick="window.openCavaBotSettings()" style="color:var(--gold-accent); font-weight:bold; text-decoration:underline;">
+              🔑 Hacé clic aquí para activar la IA Real con tu clave gratuita de Google Gemini.
+            </a>
+          </div>
+        `, 'bot');
+      }, 250);
+    }
   };
 
   window.handleCavaBotSubmit = function (e) {
@@ -5002,7 +5187,7 @@
 
   function appendCavaBotMessage(contentHtml, sender = 'bot') {
     const msgs = document.getElementById('cavabot-messages');
-    if (!msgs) return;
+    if (!msgs) return null;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const msgDiv = document.createElement('div');
@@ -5015,6 +5200,7 @@
     msgs.appendChild(msgDiv);
     msgs.scrollTop = msgs.scrollHeight;
     if (window.lucide) window.lucide.createIcons({ scope: msgDiv });
+    return msgDiv;
   }
 
   function processCavaBotQuery(rawPrompt) {
