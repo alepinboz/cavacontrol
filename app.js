@@ -2011,8 +2011,8 @@
           <td><strong>${a.bodega}</strong></td>
           <td>${a.etiqueta}</td>
           <td>${a.cepa}</td>
-          <td>${uxb} un.</td>
           <td><strong style="font-size:1.05rem">${metrics.stock}</strong> bot.</td>
+          <td>${uxb} un.</td>
           <td>${cajasEquiv} cj. ${botellasSueltas > 0 ? `+ ${botellasSueltas} bot.` : ''}</td>
           <td>${formatCurrency(metrics.ultimoPrecioCaja)}</td>
           <td class="text-gold">+${formatCurrency(metrics.ultimoCostoAdicCaja)}</td>
@@ -2083,7 +2083,8 @@
 
       const itemsDetail = items.map(i => {
         const art = state.articulos.find(a => String(a.id) === String(i.articuloId));
-        const artLabel = art ? `${art.bodega} ${art.etiqueta}` : 'Vino';
+        const cepaStr = i.cepa || (art ? art.cepa : '');
+        const artLabel = art ? `${art.bodega} ${art.etiqueta}${cepaStr ? ' (' + cepaStr + ')' : ''}` : 'Vino';
         return `${i.cantidadBotellas}x ${artLabel}`;
       }).join(', ');
 
@@ -2207,10 +2208,11 @@
       const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
       const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
       const cliName = cli ? `${cli.nombre} ${cli.apellido}`.toLowerCase() : '';
+      const cepaText = (s.cepa || (art ? art.cepa : '')).toLowerCase();
       const artName = art ? `${art.bodega} ${art.etiqueta} ${art.cepa}`.toLowerCase() : '';
       const detText = (s.detalle || '').toLowerCase();
 
-      const matchSearch = !searchVal || cliName.includes(searchVal) || artName.includes(searchVal) || detText.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
+      const matchSearch = !searchVal || cliName.includes(searchVal) || artName.includes(searchVal) || cepaText.includes(searchVal) || detText.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
       const matchCliente = !clienteFilter || String(s.clienteId) === String(clienteFilter);
       const matchTipo = !tipoFilter || s.tipoVenta === tipoFilter;
       const matchMembresia = !membresiaFilter || String(s.membresiaId) === String(membresiaFilter);
@@ -2241,7 +2243,7 @@
     });
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No hay salidas/ventas registradas que coincidan con los filtros</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted">No hay salidas/ventas registradas que coincidan con los filtros</td></tr>`;
       return;
     }
 
@@ -2257,6 +2259,7 @@
         const memb = state.membresias.find(m => String(m.id) === String(s.membresiaId));
         if (memb) detalleDisplay = `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion} (${detalleDisplay})`;
       }
+      const cepaDisplay = s.cepa || (art ? art.cepa : '-');
 
       const unitPrice = Number(s.precioUnitario) || 0;
       const totalVenta = unitPrice * (Number(s.cantidadBotellas) || 0);
@@ -2316,6 +2319,7 @@
           <td><strong>${cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A'}</strong></td>
           <td><span class="badge ${badgeClass}">${isMembresia ? 'Membresía' : 'Botella'}</span></td>
           <td>${detalleDisplay}</td>
+          <td>${cepaDisplay}</td>
           <td><strong>${s.cantidadBotellas}</strong> bot.</td>
           <td>${unitPrice > 0 ? formatCurrency(unitPrice) : '-'}</td>
           <td><strong>${totalVenta > 0 ? formatCurrency(totalVenta) : '-'}</strong></td>
@@ -3731,7 +3735,7 @@
         const wineList = calc.items.map(i => {
           const art = state.articulos.find(a => String(a.id) === String(i.articuloId));
           const artStock = art ? getArticuloMetrics(art.id).stock : 0;
-          const artName = art ? `${art.bodega} ${art.etiqueta}` : 'Vino';
+          const artName = art ? `${art.bodega} ${art.etiqueta}${art.cepa ? ' (' + art.cepa + ')' : ''}` : 'Vino';
           const stockColor = artStock >= i.cantidad ? 'var(--emerald)' : 'var(--rose)';
           return `<li><strong>${i.cantidad}x ${artName}</strong> (Stock disponible: <span style="color:${stockColor}">${artStock} bot.</span>)</li>`;
         }).join('');
@@ -3814,6 +3818,7 @@
           clienteId,
           tipoVenta: 'BOTELLA',
           articuloId,
+          cepa: art ? art.cepa : '',
           cantidadBotellas,
           precioUnitario,
           precioVentaPublico: pPublico,
@@ -3858,6 +3863,7 @@
         const transactionGroupId = Date.now().toString();
         calc.items.forEach((item, idx) => {
           const fifo = calculateFifoConsumption(item.articuloId, item.cantidad, unitPricePerBottle);
+          const itemArt = state.articulos.find(a => String(a.id) === String(item.articuloId));
 
           state.salidas.push({
             id: generateUniqueId(`sal-${transactionGroupId}`),
@@ -3865,6 +3871,7 @@
             clienteId,
             tipoVenta: 'MEMBRESIA',
             articuloId: item.articuloId,
+            cepa: itemArt ? itemArt.cepa : '',
             membresiaId: memb.id,
             cantidadBotellas: item.cantidad,
             precioUnitario: unitPricePerBottle,
@@ -4821,7 +4828,7 @@
       });
     } else if (moduleName === 'stock') {
       title = 'Reporte de Inventario y Valorización de Stock';
-      headers = ['Bodega', 'Etiqueta', 'Cepa', 'UxB', 'Stock Físico (Bot.)', 'Cajas Equiv.', 'Último Costo Unit. ($)', 'Valor Total Inventario ($)', 'Estado'];
+      headers = ['Bodega', 'Etiqueta', 'Cepa', 'Botellas Físicas', 'UxB', 'Cajas Equiv.', 'Último Costo Unit. ($)', 'Valor Total Inventario ($)', 'Estado'];
       const searchVal = (document.getElementById('search-stock').value || '').toLowerCase();
       const estadoFilter = document.getElementById('filter-stock-estado') ? document.getElementById('filter-stock-estado').value : '';
       const minCosto = document.getElementById('filter-stock-costo-min') && document.getElementById('filter-stock-costo-min').value !== '' ? parseFloat(document.getElementById('filter-stock-costo-min').value) : null;
@@ -4849,8 +4856,8 @@
           a.bodega,
           a.etiqueta,
           a.cepa,
-          `${uxb} un.`,
           `${metrics.stock} bot.`,
+          `${uxb} un.`,
           `${cajasEquiv} cj.${botellasSueltas > 0 ? ` + ${botellasSueltas} bot.` : ''}`,
           formatCurrency(metrics.ultimoCostoUnitario),
           formatCurrency(totalVal),
@@ -4859,7 +4866,7 @@
       });
     } else if (moduleName === 'salidas') {
       title = 'Reporte de Ventas y Entregas (Salidas)';
-      headers = ['Fecha', 'Cliente', 'Tipo Venta', 'Detalle / Vino', 'Botellas', 'Precio Unit. ($)', 'Total Venta ($)', 'Ganancia Nominal (PEPS) ($)'];
+      headers = ['Fecha', 'Cliente', 'Tipo Venta', 'Detalle / Vino', 'Cepa', 'Botellas', 'Precio Unit. ($)', 'Total Venta ($)', 'Ganancia Nominal (PEPS) ($)'];
       const searchVal = (document.getElementById('search-salidas').value || '').toLowerCase();
       const clienteFilter = document.getElementById('filter-salidas-cliente') ? document.getElementById('filter-salidas-cliente').value : '';
       const tipoFilter = document.getElementById('filter-salidas-tipo') ? document.getElementById('filter-salidas-tipo').value : '';
@@ -4871,9 +4878,10 @@
         const cli = state.clientes.find(c => String(c.id) === String(s.clienteId));
         const art = state.articulos.find(a => String(a.id) === String(s.articuloId));
         const cliName = cli ? `${cli.nombre} ${cli.apellido}`.toLowerCase() : '';
+        const cepaText = (s.cepa || (art ? art.cepa : '')).toLowerCase();
         const artName = art ? `${art.bodega} ${art.etiqueta} ${art.cepa}`.toLowerCase() : '';
         const detText = (s.detalle || '').toLowerCase();
-        const matchSearch = !searchVal || cliName.includes(searchVal) || artName.includes(searchVal) || detText.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
+        const matchSearch = !searchVal || cliName.includes(searchVal) || artName.includes(searchVal) || cepaText.includes(searchVal) || detText.includes(searchVal) || (s.tipoVenta && s.tipoVenta.toLowerCase().includes(searchVal));
         const matchCliente = !clienteFilter || String(s.clienteId) === String(clienteFilter);
         const matchTipo = !tipoFilter || s.tipoVenta === tipoFilter;
         const matchMembresia = !membresiaFilter || String(s.membresiaId) === String(membresiaFilter);
@@ -4896,6 +4904,7 @@
           const memb = state.membresias.find(m => String(m.id) === String(s.membresiaId));
           if (memb) detalleDisplay = `[${memb.tipo || 'Selección'} - ${memb.codigo}] ${memb.descripcion} (${detalleDisplay})`;
         }
+        const cepaDisplay = s.cepa || (art ? art.cepa : '-');
         const unitPrice = Number(s.precioUnitario) || 0;
         const totalVenta = unitPrice * (Number(s.cantidadBotellas) || 0);
         const ganancia = s.gananciaNominal !== undefined ? Number(s.gananciaNominal) : 0;
@@ -4904,6 +4913,7 @@
           cli ? `${cli.nombre} ${cli.apellido}` : 'Cliente N/A',
           isMembresia ? 'Membresía' : 'Venta Botella',
           detalleDisplay,
+          cepaDisplay,
           `${s.cantidadBotellas} bot.`,
           formatCurrency(unitPrice),
           formatCurrency(totalVenta),

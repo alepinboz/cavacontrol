@@ -700,7 +700,7 @@
           <div class="section-toolbar" style="flex-wrap:wrap; gap:1rem;">
             <div class="search-box">
               <i data-lucide="search"></i>
-              <input type="text" id="search-salidas" placeholder="Buscar por cliente, vino o tipo...">
+              <input type="text" id="search-salidas" placeholder="Buscar por cliente, vino, cepa o tipo...">
             </div>
             <div class="toolbar-actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
               <button class="btn btn-ghost" onclick="window.exportModuleData('salidas', 'excel')" title="Exportar Salidas a Excel (CSV)">
@@ -812,6 +812,7 @@
                     <th>Cliente</th>
                     <th>Tipo de Venta</th>
                     <th>Detalle / Artículo</th>
+                    <th>Cepa</th>
                     <th>Cantidad Botellas</th>
                     <th>Precio Unit.</th>
                     <th>Total Venta</th>
@@ -929,6 +930,6 @@
   <!-- TOAST NOTIFICATION -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=7.0_fix_editar_entradas"></script>
+  <script src="app.js?v=7.1_cepa_stock"></script>
 </body>
 </html>
